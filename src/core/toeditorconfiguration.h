@@ -61,6 +61,9 @@ namespace ToConfiguration
                 , CodeCompleteBool      // #define CONF_CODE_COMPLETION
                 , CompleteSortBool      // #define CONF_COMPLETION_SORT
                 , CodeCompleteDelayInt
+                , CodeCompleteOnTypingBool  // complete bare identifiers, not just after '.'
+                , CodeCompleteMinCharsInt   // min chars of a bare identifier before completing
+                , CallTipsEnabledBool       // show parameter hints when calling a function/procedure
                 , UseEditorShortcutsBool
                 , EditorShortcutsMap
                 , AutoIndentBool        // #define CONF_AUTO_INDENT

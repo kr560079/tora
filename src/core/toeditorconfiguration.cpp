@@ -70,6 +70,12 @@ QVariant ToConfiguration::Editor::defaultValue(int option) const
             return QVariant((bool) true);
         case CodeCompleteDelayInt:
         	return QVariant(500);
+        case CodeCompleteOnTypingBool:
+            return QVariant((bool) true);
+        case CodeCompleteMinCharsInt:
+            return QVariant((int) 3);
+        case CallTipsEnabledBool:
+            return QVariant((bool) true);
         case UseEditorShortcutsBool:
             return QVariant((bool) false);
         case EditorShortcutsMap:

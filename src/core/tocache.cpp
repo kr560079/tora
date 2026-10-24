@@ -34,6 +34,7 @@
 
 #include "core/tocache.h"
 #include "core/toconfiguration.h"
+#include "core/toeditorconfiguration.h"
 #include "core/toconnection.h"
 #include "core/toconnectionsub.h"
 #include "core/toconnectionsubloan.h"
@@ -236,15 +237,37 @@ toCache::CacheEntry const* toCache::findEntry(toCache::ObjectRef const& o) const
 QStringList toCache::completeEntry(QString const& schema, QString const& object) const
 {
     using namespace QmlJS::PersistentTrie;
+    QReadLocker lock(&cacheLock);
     auto i(m_schemaTrie.find(schema));
     if (i != m_schemaTrie.end())
     {
-        QStringList retvalSchema = m_schemaTrie.value(schema).complete(object, QString(), LookupFlags(CaseInsensitive));
-    	//QStringList retvalPublic = m_schemaTrie.value("PUBLIC").complete(object, "PUBLIC.", LookupFlags(CaseInsensitive));
-    	if(retvalSchema.size() < 200) retvalSchema.sort();
-    	//if(retvalPublic.size() < 800) retvalPublic.sort();
-    	//retvalSchema.append(retvalPublic);
-    	return retvalSchema;
+        bool const doSort = toConfigurationNewSingle::Instance().option(ToConfiguration::Editor::CompleteSortBool).toBool();
+
+        // Pass 1: exact prefix match (today's behavior) - ranked first.
+        QStringList exact = m_schemaTrie.value(schema).complete(object, QString(), LookupFlags(CaseInsensitive));
+        if (doSort && exact.size() < 200)
+            exact.sort();
+
+        // Pass 2: fuzzy/subsequence match (SkipChars) for whatever pass 1 missed.
+        // Only run once there's enough of a query to keep the trie fan-out cheap -
+        // SkipChars makes complete() explore every branch at every node.
+        QStringList retval = exact;
+        if (object.length() >= 2)
+        {
+            QStringList fuzzy = m_schemaTrie.value(schema).complete(object, QString(), LookupFlags(CaseInsensitive | SkipChars));
+            if (doSort && fuzzy.size() < 200)
+                fuzzy.sort();
+            QSet<QString> seen(exact.begin(), exact.end());
+            Q_FOREACH(QString const& s, fuzzy)
+            {
+                if (!seen.contains(s))
+                {
+                    retval.append(s);
+                    seen.insert(s);
+                }
+            }
+        }
+        return retval;
     }
     return QStringList();
 }
@@ -313,6 +336,28 @@ QStringList toCache::userList(UserListType listType) const
     return retval;
 }
 
+static toSQL SQLDescribeArguments(
+    "toCache:DescribeArguments",
+    "select argument_name, data_type, position, in_out, defaulted, overload, object_name "
+    "from all_arguments "
+    "where owner = :owner<char[32],in> and object_name = :name<char[32],in> and package_name is null "
+    "order by overload, position",
+    "Fetch argument list for a standalone procedure/function, used to build call tips",
+    "0801",
+    "Oracle"
+);
+
+static toSQL SQLDescribePackageArguments(
+    "toCache:DescribePackageArguments",
+    "select argument_name, data_type, position, in_out, defaulted, overload, object_name "
+    "from all_arguments "
+    "where owner = :owner<char[32],in> and package_name = :name<char[32],in> "
+    "order by object_name, overload, position",
+    "Fetch argument list for every public member of a package, used to build call tips",
+    "0801",
+    "Oracle"
+);
+
 // Setters - non-const methods
 toCache::CacheEntry const* toCache::describeEntry(toCache::CacheEntry const*e)
 {
@@ -324,17 +369,44 @@ toCache::CacheEntry const* toCache::describeEntry(toCache::CacheEntry const*e)
 
     toCache::CacheEntry *entry = const_cast<toCache::CacheEntry*>(e);
 
+    // Already described - nothing to do. (Without this guard, callers like
+    // autoCompleteColumnName()/call tips would re-run a DB query on every
+    // invocation instead of once per object.)
+    if (entry->described)
+        return entry;
+
     try
     {
         QWriteLocker lock(&cacheLock);
         toConnectionSubLoan conn(parentConn);
 
-
         toQAdditionalDescriptions* l = conn->decribe(e->name);
         entry->description.clear();
         entry->description = *l;
-
         delete l;
+
+        if (parentConn.providerIs("Oracle") &&
+                (entry->type == PROCEDURE || entry->type == FUNCTION || entry->type == PACKAGE))
+        {
+            toSQL const& sql = (entry->type == PACKAGE) ? SQLDescribePackageArguments : SQLDescribeArguments;
+            toQuery query(conn, sql, toQueryParams() << e->name.first << e->name.second);
+            toQArgumentDescriptionList args;
+            while (!query.eof())
+            {
+                toCache::ArgumentDescription a;
+                a.Name       = (QString)query.readValue();
+                a.Datatype   = (QString)query.readValue();
+                a.Position   = ((QString)query.readValue()).toInt();
+                a.InOut      = (QString)query.readValue();
+                a.Defaulted  = ((QString)query.readValue()).startsWith("Y", Qt::CaseInsensitive);
+                a.Overload   = ((QString)query.readValue()).toInt();
+                a.ObjectName = (QString)query.readValue();
+                args.append(a);
+            }
+            entry->description.insert("ARGUMENTLIST", QVariant::fromValue(args));
+        }
+
+        entry->described = true;
     }
     catch (...)
     {

@@ -282,6 +282,25 @@ class TORA_EXPORT toCache : public QObject
             QString ToolTip;
         }; // struct ColumnDescription
 
+        /** Describes one parameter of a procedure/function, as read from
+            ALL_ARGUMENTS. Used to build call tips.
+        */
+        struct ArgumentDescription
+        {
+            /** Name of the procedure/function this argument belongs to.
+                Needed because a PACKAGE cache entry represents the whole
+                package, not a single member - this field lets callers
+                filter down to the member actually being called.
+            */
+            QString ObjectName;
+            QString Name;
+            QString Datatype;
+            QString InOut;
+            int Position;
+            int Overload;
+            bool Defaulted;
+        }; // struct ArgumentDescription
+
         /** Objects state - updated by background threads
         */
 #ifdef Q_CC_MSVC
@@ -470,6 +489,11 @@ class TORA_EXPORT toCache : public QObject
 */
 typedef QList<toCache::ColumnDescription> toQColumnDescriptionList;
 Q_DECLARE_METATYPE(toQColumnDescriptionList);
+
+/** A short representation of list<toCache::ArgumentDescription>
+*/
+typedef QList<toCache::ArgumentDescription> toQArgumentDescriptionList;
+Q_DECLARE_METATYPE(toQArgumentDescriptionList);
 
 class toCacheEntryTable : public toCache::CacheEntry
 {

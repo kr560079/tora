@@ -48,6 +48,8 @@
 #include <QDir>
 
 #include "core/toeditorconfiguration.h"
+#include "core/persistenttrie.h"
+#include <Qsci/qscilexersql.h>
 
 using namespace ToConfiguration;
 using namespace SQLParser;
@@ -59,6 +61,7 @@ toWorksheetText::toWorksheetText(toWorksheet *worksheet, QWidget *parent, const 
     , popup(new toComplPopup(this))
     , m_complAPI(NULL)
     , m_complTimer(new QTimer(this))
+    , m_complAfterDot(true)
     , m_fsWatcher(new QFileSystemWatcher(this))
     , m_bookmarkHandle(QsciScintilla::markerDefine(QsciScintilla::Background))
     , m_bookmarkMarginHandle(QsciScintilla::markerDefine(QsciScintilla::RightTriangle))
@@ -204,6 +207,19 @@ void toWorksheetText::keyPressEvent(QKeyEvent * e)
     else if (m_completeEnabled && e->key() == Qt::Key_Period)
     {
         // Dot was pressed start completion timer, save current position
+        m_complAfterDot = true;
+        m_complTimer->start(toConfigurationNewSingle::Instance().option(Editor::CodeCompleteDelayInt).toInt());
+        m_complPosition = currentPosition();
+        getCursorPosition(&m_complLine, &m_complLinePos);
+    }
+    else if (m_completeEnabled
+             && toConfigurationNewSingle::Instance().option(Editor::CodeCompleteOnTypingBool).toBool()
+             && !e->text().isEmpty() && e->text().at(0).isLetterOrNumber())
+    {
+        // Bare identifier character typed (not preceded by '.', handled above) -
+        // (re)start the same completion timer; slotCompletiotionTimout() checks
+        // the word length once the character has actually been inserted below.
+        m_complAfterDot = false;
         m_complTimer->start(toConfigurationNewSingle::Instance().option(Editor::CodeCompleteDelayInt).toInt());
         m_complPosition = currentPosition();
         getCursorPosition(&m_complLine, &m_complLinePos);
@@ -315,7 +331,10 @@ void toWorksheetText::slotCompletiotionTimout()
     if (curcol < m_complLinePos)
         return;
 
-    autoCompleteFromAPIs();
+    if (m_complAfterDot)
+        autoCompleteFromAPIs();
+    else
+        autoCompleteWordOrKeyword();
 }
 
 // the Tora way of autocomletition
@@ -373,10 +392,10 @@ void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::W
     TLOG(0, toNoDecorator, __HERE__) << "autoCompleteTableName Start" << std::endl;
 
     toConnection &connection = toConnection::currentConnection(this);
+    // completeEntry() already returns results ranked (exact matches before fuzzy
+    // ones) and sorted within each rank per the CompleteSortBool setting - do not
+    // re-sort here, that would destroy the ranking.
     QStringList compleList = connection.getCache().completeEntry(context, secondWord.text().toUpper());
-
-    if (compleList.size() <= 100) // Do not waste CPU on sorting huge completition list TODO: limit the amount of returned entries
-        compleList.sort();
 
     int position = currentPosition();
     if (compleList.isEmpty())
@@ -414,20 +433,49 @@ void toWorksheetText::autoCompleteColumnName(QString const& context, toSqlText::
     if (e)
     {
         TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step a" << std::endl;
-        // TODO this is sync db request evaluated in the main (UI) thread - no async approach yet
+        // Sync DB request on first call for this table only - describeEntry() now
+        // caches via CacheEntry::described, so subsequent calls are free.
         connection.getCache().describeEntry(e);
         toQAdditionalDescriptions d  = e->description;
         toQColumnDescriptionList dl = d.value("COLUMNLIST").value<toQColumnDescriptionList>();
 
-        foreach(toCache::ColumnDescription cd, dl)
+        QString const prefix = secondWord.text().toUpper();
+        bool const doSort = toConfigurationNewSingle::Instance().option(Editor::CompleteSortBool).toBool();
+
+        // Pass 1: exact prefix match - ranked first.
+        QStringList exact;
+        foreach(toCache::ColumnDescription const& cd, dl)
         {
-            TLOG(0, toNoDecorator, __HERE__) << cd.Name << std::endl;
-            if (cd.Name.startsWith(secondWord.text().toUpper()))
-                compleList.append(cd.Name);
+            if (cd.Name.startsWith(prefix))
+                exact.append(cd.Name);
+        }
+        if (doSort)
+            exact.sort();
+        compleList = exact;
+
+        // Pass 2: fuzzy/subsequence match for whatever pass 1 missed, via a
+        // throwaway trie over this (small) column list - cheap at this scale.
+        if (prefix.length() >= 2)
+        {
+            QmlJS::PersistentTrie::Trie trie;
+            foreach(toCache::ColumnDescription const& cd, dl)
+                trie.insert(cd.Name);
+            using namespace QmlJS::PersistentTrie;
+            QStringList fuzzy = trie.complete(prefix, QString(), LookupFlags(CaseInsensitive | SkipChars));
+            if (doSort)
+                fuzzy.sort();
+            QSet<QString> seen(exact.begin(), exact.end());
+            foreach(QString const& s, fuzzy)
+            {
+                if (!seen.contains(s))
+                {
+                    compleList.append(s);
+                    seen.insert(s);
+                }
+            }
         }
         TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step b" << std::endl;
     }
-    compleList.sort();
 
     int position = currentPosition();
     if (compleList.isEmpty())
@@ -448,6 +496,93 @@ void toWorksheetText::autoCompleteColumnName(QString const& context, toSqlText::
         TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step c" << std::endl;
         displayCompletePopup(compleList);
     }
+}
+
+void toWorksheetText::autoCompleteWordOrKeyword()
+{
+    TLOG(0, toTimeDelta, __HERE__) << "autoCompleteWordOrKeyword Start" << std::endl;
+
+    toSqlText::Word firstWord, secondWord;
+    tableAtCursor(firstWord, secondWord);
+
+    // Only handle a truly bare identifier here. "foo.bar" is schema/alias/table
+    // completion, already handled by the dot-triggered autoCompleteFromAPIs().
+    if (!firstWord.text().isEmpty())
+        return;
+
+    QString const word = secondWord.text().toUpper();
+    int const minChars = toConfigurationNewSingle::Instance().option(Editor::CodeCompleteMinCharsInt).toInt();
+    if (word.length() < minChars)
+        return;
+
+    using namespace QmlJS::PersistentTrie;
+    bool const doSort = toConfigurationNewSingle::Instance().option(Editor::CompleteSortBool).toBool();
+
+    // Table/view/synonym names - completeEntry() already ranks exact before fuzzy.
+    toConnection &connection = toConnection::currentConnection(this);
+    QStringList compleList = connection.getCache().completeEntry(toToolWidget::currentSchema(this), word);
+
+    // SQL/PL-SQL keywords, built once from the vendored QsciLexerSQL's static
+    // keyword tables (used here purely as a keyword string resource, not as
+    // the active lexer).
+    static QStringList keywordList;
+    static Trie keywordTrie;
+    if (keywordList.isEmpty())
+    {
+        QsciLexerSQL lex;
+        const char* kw = lex.keywords(1); // only set 1 is non-null in the base QsciLexerSQL
+        if (kw != NULL)
+            keywordList += QString(kw).split(' ', QString::SkipEmptyParts);
+        for (int i = 0; i < keywordList.size(); ++i)
+            keywordList[i] = keywordList.at(i).toUpper();
+        keywordList.removeDuplicates();
+        foreach(QString const& k, keywordList)
+            keywordTrie.insert(k);
+    }
+
+    QStringList keywordExact = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive));
+    if (doSort)
+        keywordExact.sort();
+
+    QSet<QString> seen(compleList.begin(), compleList.end());
+    foreach(QString const& k, keywordExact)
+    {
+        if (!seen.contains(k))
+        {
+            compleList.append(k);
+            seen.insert(k);
+        }
+    }
+
+    if (word.length() >= 2)
+    {
+        QStringList keywordFuzzy = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive | SkipChars));
+        if (doSort)
+            keywordFuzzy.sort();
+        foreach(QString const& k, keywordFuzzy)
+        {
+            if (!seen.contains(k))
+            {
+                compleList.append(k);
+                seen.insert(k);
+            }
+        }
+    }
+
+    int position = currentPosition();
+    if (compleList.isEmpty())
+    {
+        this->SendScintilla(SCI_SETEMPTYSELECTION, position);
+        return;
+    }
+
+    if (!secondWord.text().isEmpty())
+        setSelection(secondWord.start(), position);
+
+    if (compleList.count() == 1)
+        completeWithText(compleList.first());
+    else
+        displayCompletePopup(compleList);
 }
 
 void toWorksheetText::slotCompleteFromPopup(QListWidgetItem* item)

@@ -187,6 +187,59 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="CodeCompleteOnTypingBool">
+         <property name="toolTip">
+          <string>Also offer completion while typing a bare table/view name, with fuzzy matching, not just after typing a '.'</string>
+         </property>
+         <property name="text">
+          <string>Complete while &amp;typing (fuzzy match)</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_7">
+         <item>
+          <widget class="QLabel" name="CodeCompleteMinCharsLabel">
+           <property name="text">
+            <string>Minimum characters before completing</string>
+           </property>
+           <property name="buddy">
+            <cstring>CodeCompleteMinCharsInt</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="CodeCompleteMinCharsInt">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>10</number>
+           </property>
+           <property name="value">
+            <number>3</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="CallTipsEnabledBool">
+         <property name="toolTip">
+          <string>Show parameter name/type hints when typing a function or procedure call</string>
+         </property>
+         <property name="text">
+          <string>&amp;Call tips (function/procedure parameter hints)</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
           <widget class="QCheckBox" name="UseEditorShortcutsBool">
@@ -809,6 +862,9 @@
   <tabstop>KeywordUpperBool</tabstop>
   <tabstop>ObjectNamesUpperBool</tabstop>
   <tabstop>CompleteSortBool</tabstop>
+  <tabstop>CodeCompleteOnTypingBool</tabstop>
+  <tabstop>CodeCompleteMinCharsInt</tabstop>
+  <tabstop>CallTipsEnabledBool</tabstop>
   <tabstop>UseEditorShortcutsBool</tabstop>
   <tabstop>EditorShortcutsEdit</tabstop>
   <tabstop>AutoIndentBool</tabstop>

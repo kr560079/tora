@@ -144,6 +144,11 @@ class toWorksheetText : public toSqlText
 
         void autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord);
         void autoCompleteColumnName(QString const& context, toSqlText::Word const &secondWord);
+
+        //! \brief Completion for a bare identifier (no leading schema/alias dot):
+        //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.
+        void autoCompleteWordOrKeyword();
+
         void completeWithText(QString const&);
         void displayCompletePopup(QStringList const& compleList);
 
@@ -176,6 +181,10 @@ class toWorksheetText : public toSqlText
         QTimer* m_complTimer;
         long m_complPosition;
         int m_complLine, m_complLinePos;
+        //! \brief true if the pending completion was triggered by a '.', false if
+        //! triggered by typing a bare identifier - tells slotCompletiotionTimout()
+        //! which of autoCompleteFromAPIs()/autoCompleteWordOrKeyword() to call.
+        bool m_complAfterDot;
 
         QString m_filename;
 

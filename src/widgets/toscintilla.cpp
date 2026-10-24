@@ -83,7 +83,8 @@ toScintilla::toScintilla(QWidget *parent, const char *name)
 
     super::setFont(Utils::toStringToFont(toConfigurationNewSingle::Instance().option(Editor::ConfTextFont).toString()));
     super::setMarginLineNumbers(0, true);
-    super::setCallTipsStyle(CallTipsNone);
+    super::setCallTipsStyle(toConfigurationNewSingle::Instance().option(Editor::CallTipsEnabledBool).toBool()
+                             ? CallTipsContext : CallTipsNone);
     super::setMarginsBackgroundColor(palete.color(QPalette::AlternateBase));
 
     // WARNING: it looks like this hack is mandatory for macosx. Oracle simply
