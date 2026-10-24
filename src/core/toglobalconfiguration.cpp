@@ -34,6 +34,7 @@
 
 #include "core/toglobalconfiguration.h"
 
+#include <QtCore/QCoreApplication>
 #include <QtCore/QFileInfo>
 #include <QtCore/QDir>
 #include <QtCore/QLocale>

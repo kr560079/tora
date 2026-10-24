@@ -45,7 +45,7 @@ OPTION(TEST_APP18 "TOMVC" ON)
 #Set our CMake minimum version
 #Require 2.4.2 for Qt finding
 #Require 2.4.3 for moc change detection and rpath updates for custom cairo install
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1 FATAL_ERROR) # qt5 requirement
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5...3.31 FATAL_ERROR) # qt5 requirement
 #CMAKE_POLICY(SET CMP0046 OLD) # The dependency target "revisiontag" of target "tora" does not exist
 #CMAKE_POLICY(SET CMP0042 OLD) # MACOSX_RPATH
 
@@ -66,7 +66,7 @@ IF(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
   # a custom target that is always built
   ADD_CUSTOM_TARGET(revisiontag ALL)
   # creates gitrevision.h using cmake script
-  ADD_CUSTOM_COMMAND(TARGET revisiontag COMMAND ${CMAKE_COMMAND}
+  ADD_CUSTOM_COMMAND(TARGET revisiontag POST_BUILD COMMAND ${CMAKE_COMMAND}
   -DUSE_EXPERIMENTAL=${USE_EXPERIMENTAL}
   -DTARGET_NAME=revisiontag
   -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/getgit.cmake
@@ -97,6 +97,9 @@ ENDIF()
 # also for trotl sql parser(boost spirit)
 # also for liber dot parser(boost spirit)
 # SET(Boost_DEBUG TRUE)
+IF(POLICY CMP0167)
+  CMAKE_POLICY(SET CMP0167 OLD) # keep using CMake's bundled FindBoost module
+ENDIF()
 IF(WIN32)
   FIND_PACKAGE(Boost 1.48.0 REQUIRED)
 ELSEIF(APPLE)

@@ -4,7 +4,7 @@
 # Mostly copied from Tora
 # 
 #Set our CMake minimum version
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5...3.31 FATAL_ERROR)
 
 # handle new cmake versions correctly
 if(COMMAND cmake_policy)
