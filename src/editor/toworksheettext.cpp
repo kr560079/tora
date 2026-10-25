@@ -606,32 +606,41 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
         }
     }
 
-    Trie const& keywordTrie = sqlKeywordTrie();
-    QStringList keywordExact = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive));
-    if (doSort)
-        keywordExact.sort();
-
     QSet<QString> seen(compleList.begin(), compleList.end());
-    foreach(QString const& k, keywordExact)
-    {
-        if (!seen.contains(k))
-        {
-            compleList.append(k);
-            seen.insert(k);
-        }
-    }
 
-    if (word.length() >= 2)
+    // With nothing typed (Ctrl+Space pressed with an empty word), every one
+    // of the ~300 SQL keywords matches via startsWith("") and would drown
+    // out the tables/columns actually worth showing - skip keywords in that
+    // case. With any prefix typed, keyword matching is genuinely useful
+    // (e.g. "SEL" -> SELECT), so keep it.
+    if (!word.isEmpty())
     {
-        QStringList keywordFuzzy = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive | SkipChars));
+        Trie const& keywordTrie = sqlKeywordTrie();
+        QStringList keywordExact = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive));
         if (doSort)
-            keywordFuzzy.sort();
-        foreach(QString const& k, keywordFuzzy)
+            keywordExact.sort();
+
+        foreach(QString const& k, keywordExact)
         {
             if (!seen.contains(k))
             {
                 compleList.append(k);
                 seen.insert(k);
+            }
+        }
+
+        if (word.length() >= 2)
+        {
+            QStringList keywordFuzzy = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive | SkipChars));
+            if (doSort)
+                keywordFuzzy.sort();
+            foreach(QString const& k, keywordFuzzy)
+            {
+                if (!seen.contains(k))
+                {
+                    compleList.append(k);
+                    seen.insert(k);
+                }
             }
         }
     }
