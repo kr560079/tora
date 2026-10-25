@@ -40,10 +40,12 @@
 class QComboBox;
 class QLineEdit;
 class QListView;
+class QToolButton;
 class QStringListModel;
 class QSortFilterProxyModel;
 class QModelIndex;
 class toEditWidget;
+class toConnection;
 
 //! \brief Lightweight always-visible tables/views browser, docked alongside
 //! Connections/Directory/Outline/QueryModel. Unlike the full Schema Browser
@@ -71,6 +73,7 @@ class toSchemaBrowserLite : public toDocklet
     private:
         QComboBox              *SchemaCombo;
         QLineEdit               *FilterEdit;
+        QToolButton             *RefreshButton;
         QListView               *ListView;
         QStringListModel         *Model;
         QSortFilterProxyModel    *ProxyModel;

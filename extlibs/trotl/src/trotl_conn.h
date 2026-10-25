@@ -208,14 +208,29 @@ struct TROTL_EXPORT OciLogin : public OciHandle<OCISvcCtx>
 		_server.attach(tnsname);
 		_tnsname = tnsname;	// store database name for further reference in the application
 
-		// set session parameters
-		_session.set_attribute(OCI_ATTR_USERNAME, username);
-		_session.set_attribute(OCI_ATTR_PASSWORD, password);
+		// An empty username requests external authentication (OCI_CRED_EXT)
+		// instead of a username/password login (OCI_CRED_RDBMS) - this is
+		// how Kerberos/OS-level authentication is negotiated: no credentials
+		// are set here at all, OCI resolves them via the Oracle client's own
+		// configuration (sqlnet.ora SQLNET.AUTHENTICATION_SERVICES, an
+		// existing Kerberos ticket, etc.), the same convention `sqlplus /`
+		// uses on the command line.
+		ub4 credType = OCI_CRED_RDBMS;
+		if (username.empty())
+		{
+			credType = OCI_CRED_EXT;
+		}
+		else
+		{
+			// set session parameters
+			_session.set_attribute(OCI_ATTR_USERNAME, username);
+			_session.set_attribute(OCI_ATTR_PASSWORD, password);
+		}
 
 		// login using _server and _session
 		set_attribute(_server);
 
-		sword res = OCICALL(OCISessionBegin(_handle, _env._errh, _session, OCI_CRED_RDBMS, mode));
+		sword res = OCICALL(OCISessionBegin(_handle, _env._errh, _session, credType, mode));
 		oci_check_error(__TROTL_HERE__, _env._errh, res);
 
 		// look for warning messages ("ORA-28002: the password will expire within ... days")

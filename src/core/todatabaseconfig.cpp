@@ -56,7 +56,7 @@ QVariant ToConfiguration::Database::defaultValue(int option) const
         case CachedConnectionsInt:
             return QVariant((int)4);
         case InitialFetchInt:
-            return QVariant((int)50);
+            return QVariant((int)200);
         case MaxContentInt:
             return QVariant((int)100);
         case MaxColDispInt:

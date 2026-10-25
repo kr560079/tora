@@ -40,7 +40,7 @@ QVariant ToConfiguration::Exporter::defaultValue(int option) const
     switch (option)
     {
         case CsvSeparator:
-            return QVariant(QString(";"));
+            return QVariant(QString(","));
         case CsvDelimiter:
             return QVariant(QString("\""));
         default:

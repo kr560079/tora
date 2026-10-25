@@ -35,13 +35,16 @@
 #include "docklets/toschemabrowserlite.h"
 #include "core/toconnection.h"
 #include "core/toconnectionregistry.h"
+#include "core/toglobalevent.h"
 #include "core/tocache.h"
 #include "core/toeditwidget.h"
 #include "editor/toworksheettext.h"
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QToolButton>
 #include <QListView>
 #include <QStringListModel>
 #include <QSortFilterProxyModel>
@@ -60,8 +63,14 @@ toSchemaBrowserLite::toSchemaBrowserLite(QWidget *parent, toWFlags flags)
     layout->setContentsMargins(2, 2, 2, 2);
     layout->setSpacing(2);
 
+    QHBoxLayout *topRow = new QHBoxLayout();
     SchemaCombo = new QComboBox(container);
-    layout->addWidget(SchemaCombo);
+    topRow->addWidget(SchemaCombo, 1);
+    RefreshButton = new QToolButton(container);
+    RefreshButton->setText(tr("\xE2\x9F\xB3")); // U+27F3, plain refresh glyph, no icon resource needed
+    RefreshButton->setToolTip(tr("Refresh schema/object list"));
+    topRow->addWidget(RefreshButton);
+    layout->addLayout(topRow);
 
     FilterEdit = new QLineEdit(container);
     FilterEdit->setPlaceholderText(tr("Filter tables/views..."));
@@ -82,8 +91,17 @@ toSchemaBrowserLite::toSchemaBrowserLite(QWidget *parent, toWFlags flags)
 
     connect(SchemaCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(refreshObjectList()));
     connect(FilterEdit, SIGNAL(textChanged(QString)), this, SLOT(handleFilterChanged(QString)));
+    connect(RefreshButton, SIGNAL(clicked()), this, SLOT(refreshSchemaList()));
     connect(ListView, SIGNAL(activated(const QModelIndex &)), this, SLOT(handleActivated(const QModelIndex &)));
     connect(qApp, SIGNAL(focusChanged(QWidget*,QWidget*)), this, SLOT(handleFocusChanged(QWidget*,QWidget*)));
+
+    // The actual trigger that was missing: refresh as soon as a connection
+    // is opened, rather than relying only on editor-focus transitions (which
+    // may not change again if the worksheet was already focused before the
+    // connection existed - this is why the panel could stay empty even
+    // after successfully connecting).
+    connect(&toGlobalEventSingle::Instance(), SIGNAL(s_addConnection(toConnection*,bool)),
+            this, SLOT(refreshSchemaList()));
 
     refreshSchemaList();
 }
