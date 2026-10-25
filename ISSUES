@@ -12,6 +12,15 @@ Minor Issues that would be nice to fix before release
 
 [Nathan] Proper encoding of author names in about dialog.
 
+[needs work] Bare-word column completion without a table alias still falls
+back to the generic schema-wide table list instead of that table's columns
+(e.g. "FROM schema.TABLE_NAME WHERE <Ctrl+Space>" with no alias). Works
+correctly once an alias is used (src/editor/toworksheettext.cpp,
+scannedTableReferences()/autoCompleteWordOrKeyword()) - the FROM/JOIN regex
+scan does map a bare table to itself, so the gap is likely in how that
+self-reference interacts with the empty-word Ctrl+Space path specifically;
+needs its own investigation.
+
 
 
 Enhancements
