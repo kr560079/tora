@@ -161,6 +161,16 @@ class toWorksheetText : public toSqlText
         //! already referenced in the current statement).
         QStringList matchingColumnNames(QString const& tableName, QString const& prefix);
 
+        //! \brief alias/bare-table-name -> real table name for every table
+        //! referenced in the current statement's FROM/JOIN clauses, scanned
+        //! directly from the statement text. A bare (non-aliased) table is
+        //! mapped to itself too. This is synchronous and immediate, unlike
+        //! m_lastTranslations (populated by the background parser, which
+        //! only tracks explicit aliases and can lag a few seconds behind
+        //! what's actually been typed) - used as the primary source for
+        //! completion, with m_lastTranslations merged in as a supplement.
+        toDictionary scannedTableReferences() const;
+
         //! \brief Completion for a bare identifier (no leading schema/alias dot):
         //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.
         //! \param explicitTrigger true when invoked directly by the user (e.g.

@@ -51,10 +51,15 @@
 #include "core/persistenttrie.h"
 #include <Qsci/qscilexersql.h>
 #include <QtCore/QRegExp>
+#include <QtCore/QRegularExpression>
 
 using namespace ToConfiguration;
 using namespace SQLParser;
 using namespace std;
+
+// Forward declaration: defined further down (next to the keyword trie it
+// builds from), needed earlier by toWorksheetText::scannedTableReferences().
+static QStringList const& sqlKeywordList();
 
 toWorksheetText::toWorksheetText(toWorksheet *worksheet, QWidget *parent, const char *name)
     : toSqlText(parent, name)
@@ -387,11 +392,14 @@ void toWorksheetText::autoCompleteFromAPIs()
             return;
         }
 
-        // firstWord is table alias, complete secondWord as column
-        if (m_lastTranslations.contains(firstWord.text().toUpper()))
+        // firstWord is table alias (or bare table name used without one),
+        // complete secondWord as column. scannedTableReferences() covers
+        // both cases and doesn't lag behind the background parser.
+        toDictionary const tableRefs = scannedTableReferences();
+        if (tableRefs.contains(firstWord.text().toUpper()))
         {
             TLOG(0, toTimeDelta, __HERE__) << "Step a" << std::endl;
-            autoCompleteColumnName(m_lastTranslations.value(firstWord.text().toUpper()), secondWord);
+            autoCompleteColumnName(tableRefs.value(firstWord.text().toUpper()), secondWord);
             return;
         }
 
@@ -439,6 +447,37 @@ void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::W
         m_complKind = ComplTable;
         displayCompletePopup(compleList);
     }
+}
+
+toDictionary toWorksheetText::scannedTableReferences() const
+{
+    toDictionary result = m_lastTranslations;
+
+    // FROM/JOIN table_name[.table_name] [[AS] alias] - deliberately simple
+    // (not a full parse) so it stays synchronous and immediate rather than
+    // waiting on the background parser. The trailing alias group is greedy
+    // and will happily grab the next clause keyword (e.g. "WHERE") when no
+    // real alias was typed - filtered out below via the keyword list.
+    static QRegularExpression const re(
+        "\\b(?:FROM|JOIN)\\s+"
+        "([A-Za-z_][A-Za-z0-9_$#]*)"
+        "(?:\\.([A-Za-z_][A-Za-z0-9_$#]*))?"
+        "(?:\\s+(?:AS\\s+)?([A-Za-z_][A-Za-z0-9_$#]*))?",
+        QRegularExpression::CaseInsensitiveOption);
+
+    QString const sql = currentStatement().sql;
+    QRegularExpressionMatchIterator it = re.globalMatch(sql);
+    while (it.hasNext())
+    {
+        QRegularExpressionMatch m = it.next();
+        QString tableName = (m.captured(2).isEmpty() ? m.captured(1) : m.captured(2)).toUpper();
+        QString alias = m.captured(3).toUpper();
+
+        result.insert(tableName, tableName); // always allow referencing the bare table name itself
+        if (!alias.isEmpty() && !sqlKeywordList().contains(alias))
+            result.insert(alias, tableName);
+    }
+    return result;
 }
 
 QStringList toWorksheetText::matchingColumnNames(QString const& tableName, QString const& prefix)
@@ -574,17 +613,23 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
 
     QString const word = secondWord.text().toUpper();
 
-    // The typed word exactly matches a known table alias (e.g. "FROM foo
-    // bar WHERE bar" - "bar" is the alias of foo). The user is almost
-    // certainly about to reference one of its columns, not searching for a
-    // table whose name happens to fuzzy-match the alias text - show all of
+    // Tables/aliases referenced in the current statement, scanned directly
+    // and synchronously (see scannedTableReferences()) - covers both
+    // explicit aliases and bare (non-aliased) table references, and isn't
+    // subject to the background parser's few-second lag.
+    toDictionary const tableRefs = scannedTableReferences();
+
+    // The typed word exactly matches a known table alias or bare table name
+    // (e.g. "FROM foo bar WHERE bar", or "FROM foo WHERE foo"). The user is
+    // almost certainly about to reference one of its columns, not searching
+    // for a table whose name happens to fuzzy-match that text - show all of
     // that table's columns directly instead of falling through to the
     // generic table/keyword search below. Bypasses the minimum-character
-    // gate too, since an exact alias match is unambiguous regardless of
+    // gate too, since an exact match here is unambiguous regardless of
     // length.
-    if (m_lastTranslations.contains(word))
+    if (tableRefs.contains(word))
     {
-        QString const tableName = m_lastTranslations.value(word);
+        QString const tableName = tableRefs.value(word);
         QStringList aliasColumns = matchingColumnNames(tableName, QString());
 
         m_complColumnNames.clear();
@@ -620,14 +665,13 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
     toConnection &connection = toConnection::currentConnection(this);
     QStringList compleList = connection.getCache().completeEntry(toToolWidget::currentSchema(this), word);
 
-    // Column names from tables already referenced in the current statement
-    // (m_lastTranslations: alias/bare-table -> real table name, populated by
-    // the background parser) - same as DBeaver suggesting FROM-clause
-    // columns without needing to type "alias." first.
+    // Column names from tables already referenced in the current statement -
+    // same as DBeaver suggesting FROM-clause columns without needing to
+    // type "alias." first.
     m_complColumnNames.clear();
     {
         QSet<QString> tablesSeen;
-        foreach(QString const& tableName, m_lastTranslations.values())
+        foreach(QString const& tableName, tableRefs.values())
         {
             if (tableName.isEmpty() || tablesSeen.contains(tableName))
                 continue;
