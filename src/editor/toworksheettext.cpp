@@ -573,6 +573,42 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
         return;
 
     QString const word = secondWord.text().toUpper();
+
+    // The typed word exactly matches a known table alias (e.g. "FROM foo
+    // bar WHERE bar" - "bar" is the alias of foo). The user is almost
+    // certainly about to reference one of its columns, not searching for a
+    // table whose name happens to fuzzy-match the alias text - show all of
+    // that table's columns directly instead of falling through to the
+    // generic table/keyword search below. Bypasses the minimum-character
+    // gate too, since an exact alias match is unambiguous regardless of
+    // length.
+    if (m_lastTranslations.contains(word))
+    {
+        QString const tableName = m_lastTranslations.value(word);
+        QStringList aliasColumns = matchingColumnNames(tableName, QString());
+
+        m_complColumnNames.clear();
+        foreach(QString const& col, aliasColumns)
+            m_complColumnNames.insert(col);
+
+        int position = currentPosition();
+        if (aliasColumns.isEmpty())
+        {
+            this->SendScintilla(SCI_SETEMPTYSELECTION, position);
+            return;
+        }
+        if (!secondWord.text().isEmpty())
+            setSelection(secondWord.start(), position);
+        if (aliasColumns.count() == 1)
+            completeWithText(aliasColumns.first());
+        else
+        {
+            m_complKind = ComplBareMixed;
+            displayCompletePopup(aliasColumns);
+        }
+        return;
+    }
+
     int const minChars = toConfigurationNewSingle::Instance().option(Editor::CodeCompleteMinCharsInt).toInt();
     if (!explicitTrigger && word.length() < minChars)
         return;
