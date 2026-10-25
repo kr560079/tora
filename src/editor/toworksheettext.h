@@ -39,6 +39,8 @@
 #include "editor/tosqltext.h"
 #include "core/utils.h"
 
+#include <QtCore/QSet>
+
 class toComplPopup;
 class toWorksheet;
 class toWorksheetTextWorker;
@@ -151,6 +153,14 @@ class toWorksheetText : public toSqlText
         void autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord);
         void autoCompleteColumnName(QString const& context, toSqlText::Word const &secondWord);
 
+        //! \brief Column names of \a tableName matching \a prefix (exact
+        //! matches first, then fuzzy/subsequence matches), ranked and sorted
+        //! the same way autoCompleteColumnName() filters results. Shared by
+        //! autoCompleteColumnName() (alias.column) and
+        //! autoCompleteWordOrKeyword() (bare column names from tables
+        //! already referenced in the current statement).
+        QStringList matchingColumnNames(QString const& tableName, QString const& prefix);
+
         //! \brief Completion for a bare identifier (no leading schema/alias dot):
         //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.
         //! \param explicitTrigger true when invoked directly by the user (e.g.
@@ -215,6 +225,12 @@ class toWorksheetText : public toSqlText
         //! table alias when the user accepts an entry.
         enum CompletionKind { ComplNone, ComplTable, ComplColumn, ComplBareMixed };
         CompletionKind m_complKind;
+
+        //! \brief Column names merged into the current ComplBareMixed popup
+        //! (from tables already referenced in the statement) - consulted by
+        //! slotCompleteFromPopup() so a selected column gets plain insertion
+        //! rather than the table-alias treatment.
+        QSet<QString> m_complColumnNames;
 
         QString m_filename;
 

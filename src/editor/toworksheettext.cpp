@@ -441,65 +441,69 @@ void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::W
     }
 }
 
-void toWorksheetText::autoCompleteColumnName(QString const& context, toSqlText::Word const &secondWord)
+QStringList toWorksheetText::matchingColumnNames(QString const& tableName, QString const& prefix)
 {
-    TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Start" << std::endl;
     toConnection &connection = toConnection::currentConnection(this);
 
     toCache::ObjectRef table;
     table.context = toToolWidget::currentSchema(this);
     table.first  = QString();
-    table.second = context; // context is the table name
+    table.second = tableName;
 
     QStringList compleList;
 
     toCache::CacheEntry const *e = connection.getCache().findEntry(table);
-    if (e)
+    if (!e)
+        return compleList;
+
+    // Sync DB request on first call for this table only - describeEntry() now
+    // caches via CacheEntry::described, so subsequent calls are free.
+    connection.getCache().describeEntry(e);
+    toQAdditionalDescriptions d  = e->description;
+    toQColumnDescriptionList dl = d.value("COLUMNLIST").value<toQColumnDescriptionList>();
+
+    bool const doSort = toConfigurationNewSingle::Instance().option(Editor::CompleteSortBool).toBool();
+
+    // Pass 1: exact prefix match - ranked first.
+    QStringList exact;
+    foreach(toCache::ColumnDescription const& cd, dl)
     {
-        TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step a" << std::endl;
-        // Sync DB request on first call for this table only - describeEntry() now
-        // caches via CacheEntry::described, so subsequent calls are free.
-        connection.getCache().describeEntry(e);
-        toQAdditionalDescriptions d  = e->description;
-        toQColumnDescriptionList dl = d.value("COLUMNLIST").value<toQColumnDescriptionList>();
+        if (cd.Name.startsWith(prefix))
+            exact.append(cd.Name);
+    }
+    if (doSort)
+        exact.sort();
+    compleList = exact;
 
-        QString const prefix = secondWord.text().toUpper();
-        bool const doSort = toConfigurationNewSingle::Instance().option(Editor::CompleteSortBool).toBool();
-
-        // Pass 1: exact prefix match - ranked first.
-        QStringList exact;
+    // Pass 2: fuzzy/subsequence match for whatever pass 1 missed, via a
+    // throwaway trie over this (small) column list - cheap at this scale.
+    if (prefix.length() >= 2)
+    {
+        QmlJS::PersistentTrie::Trie trie;
         foreach(toCache::ColumnDescription const& cd, dl)
-        {
-            if (cd.Name.startsWith(prefix))
-                exact.append(cd.Name);
-        }
+            trie.insert(cd.Name);
+        using namespace QmlJS::PersistentTrie;
+        QStringList fuzzy = trie.complete(prefix, QString(), LookupFlags(CaseInsensitive | SkipChars));
         if (doSort)
-            exact.sort();
-        compleList = exact;
-
-        // Pass 2: fuzzy/subsequence match for whatever pass 1 missed, via a
-        // throwaway trie over this (small) column list - cheap at this scale.
-        if (prefix.length() >= 2)
+            fuzzy.sort();
+        QSet<QString> seen(exact.begin(), exact.end());
+        foreach(QString const& s, fuzzy)
         {
-            QmlJS::PersistentTrie::Trie trie;
-            foreach(toCache::ColumnDescription const& cd, dl)
-                trie.insert(cd.Name);
-            using namespace QmlJS::PersistentTrie;
-            QStringList fuzzy = trie.complete(prefix, QString(), LookupFlags(CaseInsensitive | SkipChars));
-            if (doSort)
-                fuzzy.sort();
-            QSet<QString> seen(exact.begin(), exact.end());
-            foreach(QString const& s, fuzzy)
+            if (!seen.contains(s))
             {
-                if (!seen.contains(s))
-                {
-                    compleList.append(s);
-                    seen.insert(s);
-                }
+                compleList.append(s);
+                seen.insert(s);
             }
         }
-        TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step b" << std::endl;
     }
+    return compleList;
+}
+
+void toWorksheetText::autoCompleteColumnName(QString const& context, toSqlText::Word const &secondWord)
+{
+    TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Start" << std::endl;
+
+    QStringList compleList = matchingColumnNames(context, secondWord.text().toUpper());
 
     int position = currentPosition();
     if (compleList.isEmpty())
@@ -580,6 +584,28 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
     toConnection &connection = toConnection::currentConnection(this);
     QStringList compleList = connection.getCache().completeEntry(toToolWidget::currentSchema(this), word);
 
+    // Column names from tables already referenced in the current statement
+    // (m_lastTranslations: alias/bare-table -> real table name, populated by
+    // the background parser) - same as DBeaver suggesting FROM-clause
+    // columns without needing to type "alias." first.
+    m_complColumnNames.clear();
+    {
+        QSet<QString> tablesSeen;
+        foreach(QString const& tableName, m_lastTranslations.values())
+        {
+            if (tableName.isEmpty() || tablesSeen.contains(tableName))
+                continue;
+            tablesSeen.insert(tableName);
+            foreach(QString const& col, matchingColumnNames(tableName, word))
+                m_complColumnNames.insert(col);
+        }
+        foreach(QString const& col, m_complColumnNames)
+        {
+            if (!compleList.contains(col))
+                compleList.append(col);
+        }
+    }
+
     Trie const& keywordTrie = sqlKeywordTrie();
     QStringList keywordExact = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive));
     if (doSort)
@@ -623,7 +649,7 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
     if (compleList.count() == 1)
     {
         QString const& only = compleList.first();
-        if (sqlKeywordList().contains(only))
+        if (sqlKeywordList().contains(only) || m_complColumnNames.contains(only))
             completeWithText(only);
         else
             completeTableWithAlias(only);
@@ -641,7 +667,8 @@ void toWorksheetText::slotCompleteFromPopup(QListWidgetItem* item)
     {
         QString const text = item->text();
         bool const isTable = (m_complKind == ComplTable)
-                || (m_complKind == ComplBareMixed && !sqlKeywordList().contains(text));
+                || (m_complKind == ComplBareMixed && !sqlKeywordList().contains(text)
+                    && !m_complColumnNames.contains(text));
         if (isTable)
             completeTableWithAlias(text);
         else
