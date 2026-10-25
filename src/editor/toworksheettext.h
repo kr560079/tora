@@ -149,7 +149,22 @@ class toWorksheetText : public toSqlText
         //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.
         void autoCompleteWordOrKeyword();
 
+        //! \brief Re-run whichever completion is currently in progress (dot-based
+        //! or bare-word), so the popup list keeps narrowing as the user keeps
+        //! typing instead of going stale after the first match. Called both from
+        //! the completion timer and from toComplPopup::keyPressEvent() so typing
+        //! into an already-open popup still refines it.
+        void refineCompletion();
+
         void completeWithText(QString const&);
+
+        //! \brief Insert \a tableName (as completeWithText() does) then append a
+        //! generated alias, e.g. AL_COLLATERAL -> " ac" (first letter of each
+        //! '_'-separated segment), renumbered on collision with an alias/word
+        //! already used elsewhere in the document.
+        void completeTableWithAlias(QString const& tableName);
+        QString generateTableAlias(QString const& tableName) const;
+
         void displayCompletePopup(QStringList const& compleList);
 
         void scheduleParsing() override;
@@ -182,9 +197,15 @@ class toWorksheetText : public toSqlText
         long m_complPosition;
         int m_complLine, m_complLinePos;
         //! \brief true if the pending completion was triggered by a '.', false if
-        //! triggered by typing a bare identifier - tells slotCompletiotionTimout()
+        //! triggered by typing a bare identifier - tells refineCompletion()
         //! which of autoCompleteFromAPIs()/autoCompleteWordOrKeyword() to call.
         bool m_complAfterDot;
+
+        //! \brief What kind of entries the currently-displayed popup holds -
+        //! used by slotCompleteFromPopup() to decide whether to auto-append a
+        //! table alias when the user accepts an entry.
+        enum CompletionKind { ComplNone, ComplTable, ComplColumn, ComplBareMixed };
+        CompletionKind m_complKind;
 
         QString m_filename;
 

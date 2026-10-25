@@ -76,7 +76,7 @@ void toComplPopup::keyPressEvent(QKeyEvent * e)
             && e->text() != " ") || e->key() == Qt::Key_Backspace)
     {
         this->Editor->keyPressEvent(e);
-        this->Editor->autoCompleteFromAPIs();
+        this->Editor->refineCompletion();
     }
     else if (!e->text().isNull() && e->text().length() > 0 && e->text() == " ")
     {

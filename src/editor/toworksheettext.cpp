@@ -50,6 +50,7 @@
 #include "core/toeditorconfiguration.h"
 #include "core/persistenttrie.h"
 #include <Qsci/qscilexersql.h>
+#include <QtCore/QRegExp>
 
 using namespace ToConfiguration;
 using namespace SQLParser;
@@ -62,6 +63,7 @@ toWorksheetText::toWorksheetText(toWorksheet *worksheet, QWidget *parent, const 
     , m_complAPI(NULL)
     , m_complTimer(new QTimer(this))
     , m_complAfterDot(true)
+    , m_complKind(ComplNone)
     , m_fsWatcher(new QFileSystemWatcher(this))
     , m_bookmarkHandle(QsciScintilla::markerDefine(QsciScintilla::Background))
     , m_bookmarkMarginHandle(QsciScintilla::markerDefine(QsciScintilla::RightTriangle))
@@ -331,6 +333,11 @@ void toWorksheetText::slotCompletiotionTimout()
     if (curcol < m_complLinePos)
         return;
 
+    refineCompletion();
+}
+
+void toWorksheetText::refineCompletion()
+{
     if (m_complAfterDot)
         autoCompleteFromAPIs();
     else
@@ -409,10 +416,11 @@ void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::W
 
     if (compleList.count() == 1)
     {
-        completeWithText(compleList.first());
+        completeTableWithAlias(compleList.first());
     }
     else
     {
+        m_complKind = ComplTable;
         displayCompletePopup(compleList);
     }
 }
@@ -494,8 +502,42 @@ void toWorksheetText::autoCompleteColumnName(QString const& context, toSqlText::
     else
     {
         TLOG(0, toTimeDelta, __HERE__) << "autoCompleteColumnName Step c" << std::endl;
+        m_complKind = ComplColumn;
         displayCompletePopup(compleList);
     }
+}
+
+// SQL/PL-SQL keywords, built once from the vendored QsciLexerSQL's static
+// keyword tables (used here purely as a keyword string resource, not as the
+// active lexer). File-scope so both autoCompleteWordOrKeyword() and the
+// table-vs-keyword check in slotCompleteFromPopup() share one cache.
+static QStringList const& sqlKeywordList()
+{
+    static QStringList keywordList;
+    if (keywordList.isEmpty())
+    {
+        QsciLexerSQL lex;
+        const char* kw = lex.keywords(1); // only set 1 is non-null in the base QsciLexerSQL
+        if (kw != NULL)
+            keywordList += QString(kw).split(' ', QString::SkipEmptyParts);
+        for (int i = 0; i < keywordList.size(); ++i)
+            keywordList[i] = keywordList.at(i).toUpper();
+        keywordList.removeDuplicates();
+    }
+    return keywordList;
+}
+
+static QmlJS::PersistentTrie::Trie const& sqlKeywordTrie()
+{
+    static QmlJS::PersistentTrie::Trie keywordTrie;
+    static bool built = false;
+    if (!built)
+    {
+        foreach(QString const& k, sqlKeywordList())
+            keywordTrie.insert(k);
+        built = true;
+    }
+    return keywordTrie;
 }
 
 void toWorksheetText::autoCompleteWordOrKeyword()
@@ -522,24 +564,7 @@ void toWorksheetText::autoCompleteWordOrKeyword()
     toConnection &connection = toConnection::currentConnection(this);
     QStringList compleList = connection.getCache().completeEntry(toToolWidget::currentSchema(this), word);
 
-    // SQL/PL-SQL keywords, built once from the vendored QsciLexerSQL's static
-    // keyword tables (used here purely as a keyword string resource, not as
-    // the active lexer).
-    static QStringList keywordList;
-    static Trie keywordTrie;
-    if (keywordList.isEmpty())
-    {
-        QsciLexerSQL lex;
-        const char* kw = lex.keywords(1); // only set 1 is non-null in the base QsciLexerSQL
-        if (kw != NULL)
-            keywordList += QString(kw).split(' ', QString::SkipEmptyParts);
-        for (int i = 0; i < keywordList.size(); ++i)
-            keywordList[i] = keywordList.at(i).toUpper();
-        keywordList.removeDuplicates();
-        foreach(QString const& k, keywordList)
-            keywordTrie.insert(k);
-    }
-
+    Trie const& keywordTrie = sqlKeywordTrie();
     QStringList keywordExact = keywordTrie.complete(word, QString(), LookupFlags(CaseInsensitive));
     if (doSort)
         keywordExact.sort();
@@ -580,16 +605,31 @@ void toWorksheetText::autoCompleteWordOrKeyword()
         setSelection(secondWord.start(), position);
 
     if (compleList.count() == 1)
-        completeWithText(compleList.first());
+    {
+        QString const& only = compleList.first();
+        if (sqlKeywordList().contains(only))
+            completeWithText(only);
+        else
+            completeTableWithAlias(only);
+    }
     else
+    {
+        m_complKind = ComplBareMixed;
         displayCompletePopup(compleList);
+    }
 }
 
 void toWorksheetText::slotCompleteFromPopup(QListWidgetItem* item)
 {
     if (item)
     {
-        completeWithText(item->text());
+        QString const text = item->text();
+        bool const isTable = (m_complKind == ComplTable)
+                || (m_complKind == ComplBareMixed && !sqlKeywordList().contains(text));
+        if (isTable)
+            completeTableWithAlias(text);
+        else
+            completeWithText(text);
     }
     popup->hide();
 }
@@ -610,6 +650,49 @@ void toWorksheetText::completeWithText(QString const& text)
                   SendScintilla(SCI_GETCURRENTPOS) +
                   text.length());
     pos = SendScintilla(SCI_GETCURRENTPOS);
+    SendScintilla(SCI_SETSELECTIONSTART, pos, true);
+    SendScintilla(SCI_SETSELECTIONEND, pos, true);
+}
+
+QString toWorksheetText::generateTableAlias(QString const& tableName) const
+{
+    QStringList const parts = tableName.split('_', QString::SkipEmptyParts);
+    QString alias;
+    foreach(QString const& p, parts)
+    {
+        if (!p.isEmpty())
+            alias += p.at(0).toLower();
+    }
+    if (alias.isEmpty())
+        return QString();
+
+    // Avoid colliding with an alias/identifier already used elsewhere in the
+    // document (e.g. a second table whose name reduces to the same alias).
+    QString const docText = this->text();
+    QString candidate = alias;
+    int suffix = 2;
+    while (true)
+    {
+        QRegExp re("\\b" + QRegExp::escape(candidate) + "\\b", Qt::CaseInsensitive);
+        if (docText.indexOf(re) < 0)
+            break;
+        candidate = alias + QString::number(suffix++);
+    }
+    return candidate;
+}
+
+void toWorksheetText::completeTableWithAlias(QString const& tableName)
+{
+    completeWithText(tableName);
+
+    QString const alias = generateTableAlias(tableName);
+    if (alias.isEmpty())
+        return;
+
+    QString const suffix = " " + alias;
+    insert(suffix);
+    SendScintilla(SCI_SETCURRENTPOS, SendScintilla(SCI_GETCURRENTPOS) + suffix.length());
+    long pos = SendScintilla(SCI_GETCURRENTPOS);
     SendScintilla(SCI_SETSELECTIONSTART, pos, true);
     SendScintilla(SCI_SETSELECTIONEND, pos, true);
 }
