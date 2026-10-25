@@ -211,6 +211,7 @@ SET(TORA_MOC_CLASSES
   docklets/toviewconnections.h
   docklets/toviewdirectory.h
   docklets/tocodeoutline.h
+  docklets/toschemabrowserlite.h
 
   docklets/toquerymodel.h
   tools/toer.h
@@ -484,6 +485,7 @@ SET(TORA_SOURCES
   docklets/toviewconnections.cpp
   docklets/toviewdirectory.cpp
   docklets/tocodeoutline.cpp
+  docklets/toschemabrowserlite.cpp
 
   editor/tocomplpopup.cpp
   editor/todebugtext.cpp

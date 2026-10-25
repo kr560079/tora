@@ -74,6 +74,12 @@ class toWorksheetText : public toSqlText
         // Override QScintilla (display custom toComplPopup window)
         void autoCompleteFromAPIs() override;
 
+        //! \brief Insert \a objectName at the current cursor position, with
+        //! the same auto-generated alias table completion adds. For external
+        //! callers (e.g. the schema browser docklet) that don't go through
+        //! the completion popup.
+        void insertObjectReference(QString const& objectName);
+
         /** Get filename of current file in editor.
          * @return Filename of editor.
          */

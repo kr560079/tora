@@ -150,6 +150,12 @@ toWorksheetText::~toWorksheetText()
     delete m_parserThread;
 }
 
+void toWorksheetText::insertObjectReference(QString const& objectName)
+{
+    setFocus();
+    completeTableWithAlias(objectName);
+}
+
 void toWorksheetText::setHighlighter(toSqlText::HighlighterTypeEnum e)
 {
     super::setHighlighter(e);
