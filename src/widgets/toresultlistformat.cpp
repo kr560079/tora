@@ -35,6 +35,7 @@
 #include "widgets/toresultlistformat.h"
 #include "core/utils.h"
 #include "core/tolistviewformatter.h"
+#include "core/tolistviewformatteridentifier.h"
 #include "core/toconfiguration.h"
 #include "core/toglobalconfiguration.h"
 
@@ -96,9 +97,12 @@ toExportSettings toResultListFormat::exportSettings()
 
 toExportSettings toResultListFormat::plaintextCopySettings()
 {
+    // Tab-delimited, not the fixed-width "TEXT" formatter: this is what
+    // pastes as separate columns into Excel/Sheets/other grid apps, matching
+    // how copy-paste behaves elsewhere rather than dumping padded text.
     return toExportSettings(toExportSettings::RowsSelected,
                             toExportSettings::ColumnsSelected,
-                            0,
+                            toListViewFormatterIdentifier::TAB_DELIMITED,
                             toConfigurationNewSingle::Instance().option(ToConfiguration::Global::ClipboardRHeadersBool).toBool(),
                             toConfigurationNewSingle::Instance().option(ToConfiguration::Global::ClipboardCHeadersBool).toBool(),
                             "",

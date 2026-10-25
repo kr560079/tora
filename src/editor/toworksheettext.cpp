@@ -189,7 +189,17 @@ void toWorksheetText::keyPressEvent(QKeyEvent * e)
     }
     else if (m_completeEnabled && e->modifiers() == Qt::ControlModifier && e->key() == Qt::Key_Space)
     {
-        autoCompleteFromDocument();
+        // Explicit "show me completions now" trigger - same schema-aware
+        // completion the dot/typing triggers use, but bypassing the minimum
+        // character count since the user asked for it directly (e.g. right
+        // after "select * from " with nothing typed yet).
+        toSqlText::Word firstWord, secondWord;
+        tableAtCursor(firstWord, secondWord);
+        m_complAfterDot = !firstWord.text().isEmpty();
+        if (m_complAfterDot)
+            autoCompleteFromAPIs();
+        else
+            autoCompleteWordOrKeyword(true);
         e->accept();
         return;
     }
@@ -540,7 +550,7 @@ static QmlJS::PersistentTrie::Trie const& sqlKeywordTrie()
     return keywordTrie;
 }
 
-void toWorksheetText::autoCompleteWordOrKeyword()
+void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
 {
     TLOG(0, toTimeDelta, __HERE__) << "autoCompleteWordOrKeyword Start" << std::endl;
 
@@ -554,7 +564,7 @@ void toWorksheetText::autoCompleteWordOrKeyword()
 
     QString const word = secondWord.text().toUpper();
     int const minChars = toConfigurationNewSingle::Instance().option(Editor::CodeCompleteMinCharsInt).toInt();
-    if (word.length() < minChars)
+    if (!explicitTrigger && word.length() < minChars)
         return;
 
     using namespace QmlJS::PersistentTrie;

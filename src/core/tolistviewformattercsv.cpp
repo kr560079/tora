@@ -69,6 +69,28 @@ QString toListViewFormatterCSV::QuoteString(const QString &str)
     return t;
 }
 
+// Standard CSV quoting (RFC 4180): only wrap a field in the delimiter
+// (quote) character when it actually needs it - i.e. when it contains the
+// separator, the delimiter itself, or a line break. Quoting every single
+// field regardless of content (the previous behavior here) is not how CSV
+// is normally produced and makes the output noisier than it needs to be.
+static QString FormatCsvField(QString const& text, QString const& separator, QString const& delimiter)
+{
+    if (delimiter.isEmpty())
+        return text;
+
+    bool const needsQuoting = text.contains(delimiter)
+            || (!separator.isEmpty() && text.contains(separator))
+            || text.contains('\n') || text.contains('\r');
+
+    if (!needsQuoting)
+        return text;
+
+    QString escaped = text;
+    escaped.replace(delimiter, delimiter + delimiter); // double any embedded delimiter/quote chars
+    return delimiter + escaped + delimiter;
+}
+
 QString toListViewFormatterCSV::getFormattedString(toExportSettings &settings,
         //const toResultModel *model);
         const QAbstractItemModel * model)
@@ -90,14 +112,12 @@ QString toListViewFormatterCSV::getFormattedString(toExportSettings &settings,
         {
             if (settings.columnsExport == toExportSettings::ColumnsSelected && !clist.contains(j))
                 continue;
-            output += QString::fromLatin1("%1%2%3%4").
-                      arg(delimiter).
-                      arg(QuoteString(model->headerData(
+            output += FormatCsvField(model->headerData(
                                           j,
                                           Qt::Horizontal,
-                                          Qt::DisplayRole).toString())).
-                      arg(delimiter).
-                      arg(separator);
+                                          Qt::DisplayRole).toString(),
+                                      separator, delimiter)
+                      + separator;
         }
         if (output.length() > 0)
             output = output.left(output.length() - separator.length());
@@ -123,11 +143,7 @@ QString toListViewFormatterCSV::getFormattedString(toExportSettings &settings,
             QString text = model->data(mi, Qt::EditRole).toString();
             line += indent;
 
-            line += QString::fromLatin1("%1%2%3%4").
-                    arg(delimiter,
-                        QuoteString(text),
-                        delimiter,
-                        separator);
+            line += FormatCsvField(text, separator, delimiter) + separator;
         }
 
         line = line.left(line.length() - separator.length());

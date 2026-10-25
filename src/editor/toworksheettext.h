@@ -147,7 +147,10 @@ class toWorksheetText : public toSqlText
 
         //! \brief Completion for a bare identifier (no leading schema/alias dot):
         //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.
-        void autoCompleteWordOrKeyword();
+        //! \param explicitTrigger true when invoked directly by the user (e.g.
+        //! Ctrl+Space) rather than by typing - bypasses the minimum character
+        //! threshold so it also works with nothing typed yet.
+        void autoCompleteWordOrKeyword(bool explicitTrigger = false);
 
         //! \brief Re-run whichever completion is currently in progress (dot-based
         //! or bare-word), so the popup list keeps narrowing as the user keeps
