@@ -132,6 +132,10 @@ void toViewConnections::handleActivated(const QModelIndex &index)
                     conn->database() == database &&
                     (opt.schema.isEmpty() || (conn->defaultSchema() == opt.schema)))
             {
+                // the default tool opens on the *current* connection, so make
+                // the one clicked current first - otherwise every click opened
+                // an editor on whichever connection was used last
+                toConnectionRegistrySing::Instance().changeConnection(*conn);
                 toGlobalEventSingle::Instance().createDefaultTool();
                 emit activated();
                 return;
