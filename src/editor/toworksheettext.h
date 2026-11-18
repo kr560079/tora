@@ -150,7 +150,9 @@ class toWorksheetText : public toSqlText
         QStringList getCompletionList(QString &partial);
 #endif
 
-        void autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord);
+        //! \param autoInsertSingle insert a lone match directly instead of
+        //! showing a one-entry popup - only for explicit triggers, never while typing
+        void autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord, bool autoInsertSingle = true);
         void autoCompleteColumnName(QString const& context, toSqlText::Word const &secondWord);
 
         //! \brief Column names of \a tableName matching \a prefix (exact
@@ -170,6 +172,13 @@ class toWorksheetText : public toSqlText
         //! what's actually been typed) - used as the primary source for
         //! completion, with m_lastTranslations merged in as a supplement.
         toDictionary scannedTableReferences() const;
+
+        //! \brief true when the text before \a wordStart puts the cursor word
+        //! where a table name belongs: right after FROM/JOIN/UPDATE/INTO or
+        //! after a comma inside a FROM list. There the half-typed word must
+        //! be completed as a table, never treated as an alias (the FROM/JOIN
+        //! scan in scannedTableReferences() picks up the partial word itself).
+        bool isTableNamePosition(long wordStart);
 
         //! \brief Completion for a bare identifier (no leading schema/alias dot):
         //! merges fuzzy-matched table/view names with SQL/PL-SQL keywords.

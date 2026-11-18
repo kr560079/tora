@@ -418,7 +418,7 @@ void toWorksheetText::autoCompleteFromAPIs()
     }
 }
 
-void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord)
+void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::Word const &secondWord, bool autoInsertSingle)
 {
     TLOG(0, toNoDecorator, __HERE__) << "autoCompleteTableName Start" << std::endl;
 
@@ -438,7 +438,7 @@ void toWorksheetText::autoCompleteTableName(QString const& context, toSqlText::W
     if (!secondWord.text().isEmpty())
         setSelection(secondWord.start(), position);
 
-    if (compleList.count() == 1)
+    if (compleList.count() == 1 && autoInsertSingle)
     {
         completeTableWithAlias(compleList.first());
     }
@@ -478,6 +478,31 @@ toDictionary toWorksheetText::scannedTableReferences() const
             result.insert(alias, tableName);
     }
     return result;
+}
+
+bool toWorksheetText::isTableNamePosition(long wordStart)
+{
+    // Look back a bounded stretch of text - enough for a long FROM list.
+    long const from = (std::max)(0L, wordStart - 2000L);
+    if (wordStart <= from)
+        return false;
+    QByteArray buf(int(wordStart - from) + 1, '\0');
+    SendScintilla(QsciScintilla::SCI_GETTEXTRANGE, from, wordStart, buf.data());
+    QString const before = convertTextS2Q(buf.constData());
+
+    // FROM / JOIN / UPDATE / INTO <cursor>
+    static QRegularExpression const keywordBefore(
+        "\\b(?:FROM|JOIN|UPDATE|INTO)\\s+$",
+        QRegularExpression::CaseInsensitiveOption);
+    if (keywordBefore.match(before).hasMatch())
+        return true;
+
+    // FROM a x, b y, <cursor> - comma inside a FROM list, i.e. no clause
+    // keyword, parenthesis or statement end between FROM and the comma
+    static QRegularExpression const fromListComma(
+        "\\bFROM\\b(?:(?!\\b(?:WHERE|GROUP|ORDER|HAVING|CONNECT|START|UNION|INTERSECT|MINUS|EXCEPT|SELECT|SET|VALUES)\\b)[^;()])*,\\s*$",
+        QRegularExpression::CaseInsensitiveOption);
+    return fromListComma.match(before).hasMatch();
 }
 
 QStringList toWorksheetText::matchingColumnNames(QString const& tableName, QString const& prefix)
@@ -612,6 +637,21 @@ void toWorksheetText::autoCompleteWordOrKeyword(bool explicitTrigger)
         return;
 
     QString const word = secondWord.text().toUpper();
+
+    // Cursor word is where a table name goes (e.g. "FROM AL_CO|"): offer
+    // tables/views/synonyms only - exact prefix matches first, then fuzzy.
+    // Must be checked before the alias lookup below: the FROM/JOIN scan
+    // reports the half-typed "AL_CO" itself as a table reference, which
+    // used to send it down the alias path and silently show nothing.
+    if (isTableNamePosition(word.isEmpty() ? currentPosition() : secondWord.start()))
+    {
+        int const minChars = toConfigurationNewSingle::Instance().option(Editor::CodeCompleteMinCharsInt).toInt();
+        if (!explicitTrigger && word.length() < minChars)
+            return;
+        m_complColumnNames.clear();
+        autoCompleteTableName(toToolWidget::currentSchema(this), secondWord, explicitTrigger);
+        return;
+    }
 
     // Tables/aliases referenced in the current statement, scanned directly
     // and synchronously (see scannedTableReferences()) - covers both
