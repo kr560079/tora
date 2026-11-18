@@ -39,7 +39,7 @@
 
 #include <QtCore/QMap>
 #include <QtCore/QVector>
-#include <QtCore/QSettings>
+#include "core/tosettings.h"
 
 class toConnection;
 class toConnectionModel;
@@ -53,7 +53,7 @@ class toNewConnection : public QDialog
         Q_OBJECT;
 
     private:
-        QSettings Settings;
+        toSettings Settings{toSettings::Connections};
         QString DefaultHost, DefaultDatabase, DefaultUser;
         // provider's default port
         int DefaultPort;

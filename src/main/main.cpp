@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "core/toconfiguration.h"
 #include "widgets/tosplash.h"
 #include "core/toconnectionprovider.h"
@@ -97,7 +98,7 @@ int main(int argc, char **argv)
     {
         // Transfer connections
         QSettings oldSettings (TOORGNAME, "TOra");
-        QSettings newSettings (TOORGNAME, TOAPPNAME);
+        toSettings newSettings(toSettings::Connections);
         oldSettings.beginGroup("connections");
         newSettings.beginGroup("connections");
         Q_FOREACH(QString key, oldSettings.allKeys())

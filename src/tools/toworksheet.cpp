@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/toworksheet.h"
 #include "ui_toworksheetsetupui.h"
 
@@ -611,7 +612,7 @@ void toWorksheet::setup(bool autoLoad)
     list.append(0);
     EditSplitter->setSizes(list);
 
-    QSettings s;
+    toSettings s;
     int v;
     s.beginGroup("toWorksheet");
     v = s.value("EditSplitterSizes0", 10).toInt();
@@ -854,7 +855,7 @@ void toWorksheet::slotSchemaChanged(const QString &)
 
 void toWorksheet::closeEvent(QCloseEvent *event)
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toWorksheet");
     s.setValue("EditSplitterSizes0", EditSplitter->sizes()[0]);
     s.setValue("EditSplitterSizes1", EditSplitter->sizes()[1]);
@@ -1840,7 +1841,7 @@ void toWorksheet::slotShowSaved()
 {
     SavedMenu->clear();
 
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("toWorksheet");
 
     QList<QVariant> statements = settings.value("sql").toList();
@@ -1858,7 +1859,7 @@ void toWorksheet::slotShowInsertSaved()
 {
     InsertSavedMenu->clear();
 
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("toWorksheet");
 
     QList<QVariant> statements = settings.value("sql").toList();
@@ -1875,7 +1876,7 @@ void toWorksheet::slotShowInsertSaved()
 
 void toWorksheet::slotRemoveSaved(QAction *action)
 {
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("toWorksheet");
 
     QList<QVariant> statements = settings.value("sql").toList();
@@ -1894,7 +1895,7 @@ void toWorksheet::slotSaveLast()
         return;
     }
 
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("toWorksheet");
 
     QString sql = m_lastQuery.sql.trimmed();

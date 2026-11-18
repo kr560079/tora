@@ -40,7 +40,7 @@
 #include <QtCore/QStringList>
 #include <QtCore/QMap>
 #include <QtCore/QSet>
-#include <QtCore/QSettings>
+#include "core/tosettings.h"
 #include <QtCore/QVariant>
 #include <QApplication>
 #include "tostyle.h"
@@ -108,7 +108,7 @@ private:
     QMap<QString, ToConfiguration::ConfigContext const*> m_contextSetPtrMap;
     QMap<QString, int> m_optionToEnumMap;
     QMap<int, QString> m_enumToOptionMap;
-    QSettings m_settings;
+    toSettings m_settings;
 
     void notifyOservers(int option, QVariant const&) const;
     QMap<int, QSet<toConfigOptionObserver*> > m_observers;

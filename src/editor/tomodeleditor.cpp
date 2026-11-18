@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "editor/tomodeleditor.h"
 #include "core/toglobalevent.h"
 #include "core/tomainwindow.h"
@@ -280,14 +281,14 @@ bool toModelEditor::eventFilter(QObject *obj, QEvent *event)
 
 void toModelEditor::readSettings()
 {
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("memoEditor");
     resize(settings.value("size", QSize(400, 300)).toSize());
 }
 
 void toModelEditor::writeSettings() const
 {
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("memoEditor");
     settings.setValue("size", size());
 }

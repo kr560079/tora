@@ -45,7 +45,7 @@
 
 toConfiguration::toConfiguration(QObject *parent)
     : QObject(parent)
-    , m_settings(TOORGNAME, TOAPPNAME)
+    , m_settings(toSettings::Main)
 {
     setQSettingsEnv();
 }

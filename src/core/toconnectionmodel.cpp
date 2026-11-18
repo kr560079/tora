@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "core/toconnectionmodel.h"
 #include "core/toconfiguration.h"
 #include "core/toglobalconfiguration.h"
@@ -59,7 +60,7 @@ void toConnectionModel::readConfig()
     beginResetModel();
     m_data.clear();
 
-    QSettings Settings;
+    toSettings Settings(toSettings::Connections);
     Settings.beginGroup("connections");
     Settings.beginGroup("history");
     for (int pos = 0; pos < Settings.childGroups().count(); ++pos)
@@ -144,7 +145,7 @@ void toConnectionModel::saveConnection(toConnectionOptions const &opt)
 {
     int pos = findConnection(opt);
 
-    QSettings Settings;
+    toSettings Settings(toSettings::Connections);
     Settings.beginGroup("connections");
     Settings.beginGroup("history");
     Settings.beginGroup(QString::number(pos));

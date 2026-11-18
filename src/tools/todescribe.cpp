@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/todescribe.h"
 
 #include "core/utils.h"
@@ -48,7 +49,7 @@ toDescribe::toDescribe(QWidget * parent)
 {
     setupUi(this);
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toDescribe");
     restoreGeometry(s.value("geometry", QByteArray()).toByteArray());
     s.endGroup();
@@ -56,7 +57,7 @@ toDescribe::toDescribe(QWidget * parent)
 
 void toDescribe::hideEvent(QHideEvent * event)
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toDescribe");
     s.setValue("geometry", saveGeometry());
     s.endGroup();

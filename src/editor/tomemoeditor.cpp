@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "editor/tomemoeditor.h"
 #include "core/utils.h"
 #include "widgets/toscintilla.h"
@@ -243,14 +244,14 @@ toMemoEditor::toMemoEditor(QWidget *parent,
 
 void toMemoEditor::readSettings()
 {
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("memoEditor");
     resize(settings.value("size", QSize(400, 300)).toSize());
 }
 
 void toMemoEditor::writeSettings() const
 {
-    QSettings settings;
+    toSettings settings;
     settings.beginGroup("memoEditor");
     settings.setValue("size", size());
 }

@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "widgets/toresultschema.h"
 #include "core/utils.h"
 #include "core/toconnection.h"
@@ -61,7 +62,7 @@ toResultSchema::toResultSchema(QWidget *parent, const char *name)
 
     if (sel.isEmpty())
     {
-        QSettings s;
+        toSettings s;
         sel = s.value("schema/" + ConnectionKey).toString();
     }
 
@@ -122,7 +123,7 @@ void toResultSchema::updateLastSchema(const QString &schema)
 {
     if (schema.isEmpty())
         return;
-    QSettings s;
+    toSettings s;
     s.setValue("schema/" + ConnectionKey, schema);
     if (SelectedFound)
         connection().setDefaultSchema(schema);

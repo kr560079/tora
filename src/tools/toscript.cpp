@@ -33,6 +33,7 @@
  * END_COMMON_COPYRIGHT_HEADER */
 
 //
+#include "core/tosettings.h"
 #include "tools/toscript.h"
 #include "core/utils.h"
 #include "core/totool.h"
@@ -198,7 +199,7 @@ toScript::toScript(QWidget *parent, toConnection &connection)
     ScriptUI->Schema->setCurrentIndex(0);
     setFocusProxy(ScriptUI->Tabs);
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toScript");
     // radiobuttons - modes
     ScriptUI->Compare->setChecked(s.value("Compare", true).toBool());
@@ -238,7 +239,7 @@ void toScript::closeEvent(QCloseEvent *event)
 {
     if (WorksheetText /*&& WorksheetText->slotClose()*/)
     {
-        QSettings s;
+        toSettings s;
         s.beginGroup("toScript");
         // radiobuttons - modes
         s.setValue("Compare", ScriptUI->Compare->isChecked());

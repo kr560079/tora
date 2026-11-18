@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/towaitevents.h"
 #include "core/utils.h"
 #include "core/tosql.h"
@@ -112,7 +113,7 @@ toWaitEvents::toWaitEvents(int session, QWidget *parent, const char *name)
 
 toWaitEvents::~toWaitEvents()
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toWaitEvents");
     s.setValue("splitter", splitter->saveState());
     s.endGroup();
@@ -210,7 +211,7 @@ void toWaitEvents::setup(int session)
     }
     TOCATCH
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toWaitEvents");
     QByteArray ba = s.value("splitter", QByteArray()).toByteArray();
     s.endGroup();

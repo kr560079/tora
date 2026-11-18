@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/toplsqltext.h"
 #include "tools/toplsqleditor.h"
 #include "core/utils.h"
@@ -267,7 +268,7 @@ toPLSQL::toPLSQL(QWidget *main, toConnection &connection)
 
     ToolMenu = NULL;
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toPLSQLEditor");
     splitter->restoreState(s.value("splitter").toByteArray());
     s.endGroup();
@@ -394,7 +395,7 @@ void toPLSQL::refresh(void)
 
 void toPLSQL::closeEvent(QCloseEvent *e)
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toPLSQLEditor");
     s.setValue("splitter", splitter->saveState());
     s.endGroup();

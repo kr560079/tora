@@ -436,6 +436,7 @@ SET(TORA_SOURCES
   core/tocodemodel.cpp
   core/toconfenum.cpp
   core/toconfiguration.cpp
+  core/tosettings.cpp
   core/toconnection.cpp
   core/toconnectionmodel.cpp
   core/toconnectionoptions.cpp

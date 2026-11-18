@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "widgets/tohelp.h"
 
 #include "core/utils.h"
@@ -254,7 +255,7 @@ toHelp::toHelp(QWidget *parent, QString name, bool modal)
     Progress->hide();
     Searching = false;
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("helpdialog");
     restoreGeometry(s.value("geometry").toByteArray());
     splitter->restoreState(s.value("splitter").toByteArray());
@@ -271,7 +272,7 @@ void toHelp::closeEvent(QCloseEvent * e)
     if (Searching)
         return;
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("helpdialog");
     s.setValue("geometry", saveGeometry());
     s.setValue("splitter", splitter->saveState());

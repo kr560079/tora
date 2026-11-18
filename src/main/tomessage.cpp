@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "main/tomessage.h"
 
 #include "widgets/toscintilla.h"
@@ -50,7 +51,7 @@ toMessage::toMessage(QWidget * parent, toWFlags f)
     Message->setReadOnly(true);
     buttonBox->button(QDialogButtonBox::Close)->setFocus(Qt::OtherFocusReason);
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toMessage");
     restoreGeometry(s.value("geometry", QByteArray()).toByteArray());
     s.endGroup();
@@ -78,7 +79,7 @@ void toMessage::appendText(const QString & text)
 
 void toMessage::hideEvent(QHideEvent * event)
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toMessage");
     s.setValue("geometry", saveGeometry());
     s.endGroup();

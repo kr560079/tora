@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/toplsqleditor.h"
 #include "tools/toplsqltext.h"
 #include "core/utils.h"
@@ -656,7 +657,7 @@ toPLSQLWidget::toPLSQLWidget(QWidget * parent)
     connect(m_editor, SIGNAL(contentChanged()),
             this, SLOT(updateContent()));
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toPLSQLEditor");
     m_splitter->restoreState(s.value("splitterWidget").toByteArray());
     s.endGroup();
@@ -665,7 +666,7 @@ toPLSQLWidget::toPLSQLWidget(QWidget * parent)
 toPLSQLWidget::~toPLSQLWidget()
 {
     // closeEvent is not called at all
-    QSettings s;
+    toSettings s;
     s.beginGroup("toPLSQLEditor");
     s.setValue("splitterWidget", m_splitter->saveState());
     s.endGroup();

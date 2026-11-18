@@ -32,6 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
+#include "core/tosettings.h"
 #include "tools/tounittest.h"
 #include "core/utils.h"
 #include "core/totool.h"
@@ -199,7 +200,7 @@ toUnitTest::toUnitTest(QWidget * parent, toConnection &connection)
     codeList->setMinimumWidth(200);
     packageList->setMinimumWidth(200);
 
-    QSettings s;
+    toSettings s;
     s.beginGroup("toUnitTest");
     splitter->restoreState(s.value("splitter", QByteArray()).toByteArray());
     codeSplitter->restoreState(s.value("codeSplitter", QByteArray()).toByteArray());
@@ -213,7 +214,7 @@ toUnitTest::toUnitTest(QWidget * parent, toConnection &connection)
 
 toUnitTest::~toUnitTest()
 {
-    QSettings s;
+    toSettings s;
     s.beginGroup("toUnitTest");
     s.setValue("splitter", splitter->saveState());
     s.setValue("codeSplitter", codeSplitter->saveState());
