@@ -45,6 +45,7 @@
 #include "core/toconnectionsub.h"
 #include "core/toconnectiontraits.h"
 #include "tools/toparamget.h"
+#include "tools/toqueryhistory.h"
 #include "tools/toresultbar.h"
 #include "tools/toresultcols.h"
 #include "tools/toresultplan.h"
@@ -98,6 +99,7 @@
 #include "icons/explainplan.xpm"
 #include "icons/filesave.xpm"
 #include "icons/insertsaved.xpm"
+#include "icons/logging.xpm"
 #include "icons/previous.xpm"
 #include "icons/refresh.xpm"
 #include "icons/stop.xpm"
@@ -136,6 +138,8 @@ namespace ToConfiguration
                 return QVariant((bool)true);
             case AutoLoad:
                 return QVariant(QString(""));
+            case QueryHistoryInt:
+                return QVariant((int)50);
             default:
                 Q_ASSERT_X( false, qPrintable(__QHERE__), qPrintable(QString("Context Worksheet un-registered enum value: %1").arg(option)));
                 return QVariant();
@@ -344,6 +348,20 @@ void toWorksheet::createActions()
                               tr("Save last SQL"),
                               this);
     connect(saveLastAct, SIGNAL(triggered()), this, SLOT(slotSaveLast(void)));
+
+    queryHistoryAct = new QAction(QPixmap(const_cast<const char**>(logging_xpm)),
+                                  tr("Query history..."),
+                                  this);
+    queryHistoryAct->setShortcut(Qt::CTRL + Qt::Key_H);
+    connect(queryHistoryAct, SIGNAL(triggered()), this, SLOT(slotShowQueryHistory(void)));
+
+    queryHistoryPrevAct = new QAction(tr("Previous statement from history"), this);
+    queryHistoryPrevAct->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_Up);
+    connect(queryHistoryPrevAct, SIGNAL(triggered()), this, SLOT(slotQueryHistoryPrevious(void)));
+
+    queryHistoryNextAct = new QAction(tr("Next statement from history"), this);
+    queryHistoryNextAct->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_Down);
+    connect(queryHistoryNextAct, SIGNAL(triggered()), this, SLOT(slotQueryHistoryNext(void)));
 }
 
 
@@ -422,6 +440,10 @@ void toWorksheet::setup(bool autoLoad)
             SLOT(slotRemoveSaved(QAction *)));
 
     workToolbar->addAction(saveLastAct);
+    workToolbar->addAction(queryHistoryAct);
+    // not on the toolbar, but must be part of the widget for the shortcuts to work
+    addAction(queryHistoryPrevAct);
+    addAction(queryHistoryNextAct);
 
     workToolbar->addWidget(Started = new QLabel(workToolbar));
     Started->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -630,6 +652,7 @@ toWorksheet::toWorksheet(QWidget *main, toConnection &connection, bool autoLoad)
     : toToolWidget(WorksheetTool, "worksheet.html", main, connection, "toWorksheet")
     , CurrentTab(NULL)
     , ResultModel(NULL)
+    , m_queryHistoryPos(-1)
     , lockConnectionActClicked(false)
 {
     createActions();
@@ -675,6 +698,12 @@ void toWorksheet::slotWindowActivated(toToolWidget *widget)
             ToolMenu->addAction(previousAct);
             ToolMenu->addAction(nextAct);
             ToolMenu->addAction(eraseAct);
+
+            ToolMenu->addSeparator();
+
+            ToolMenu->addAction(queryHistoryAct);
+            ToolMenu->addAction(queryHistoryPrevAct);
+            ToolMenu->addAction(queryHistoryNextAct);
 
             toGlobalEventSingle::Instance().addCustomMenu(ToolMenu);
         }
@@ -1225,6 +1254,7 @@ void toWorksheet::query(toSyntaxAnalyzer::statement const& statement, execTypeEn
 #endif
                     }
 
+                    recordQueryHistory(statement.sql);
                     slotFirstResult(statement.sql, toConnection::exception(buffer), false);
                 }
                 catch (const QString &exc)
@@ -1432,6 +1462,11 @@ void toWorksheet::slotFirstResult(const QString &sql,
         QString str = result;
         str += "\n" + tr("(Duration ") + duration(Time.elapsed()) + ")";
         Utils::toStatusMessage(str, false, false);
+
+        // results of statements run from the editor (Normal execution) carry
+        // m_lastQuery's text; skips "Ignoring SQL*Plus command" and the like
+        if (sql == m_lastQuery.sql)
+            recordQueryHistory(sql);
     }
 
     addLog(result);
@@ -1941,6 +1976,98 @@ void toWorksheet::insertStatement(const QString &str)
 
         Editor->insertAndSelect(t, true);
     }
+}
+
+void toWorksheet::recordQueryHistory(const QString &sql)
+{
+    try
+    {
+        toQueryHistory(connection()).add(sql);
+    }
+    TOCATCH;
+}
+
+void toWorksheet::insertQueryHistoryEntry(const QString &sql)
+{
+    QString text = sql;
+    if (!text.endsWith(QLatin1Char(';')))
+        text += QLatin1Char(';');
+
+    // insertAndSelect() only selects correctly for single-line text, so
+    // compute the end from Scintilla byte positions instead
+    Editor->beginUndoAction();
+    Editor->removeSelectedText();
+    int line, index;
+    Editor->getCursorPosition(&line, &index);
+    int start = Editor->positionFromLineIndex(line, index);
+    Editor->insert(text);
+    int length = Editor->isUtf8() ? text.toUtf8().size() : text.toLatin1().size();
+    int endLine, endIndex;
+    Editor->lineIndexFromPosition(start + length, &endLine, &endIndex);
+    Editor->setSelection(line, index, endLine, endIndex);
+    Editor->endUndoAction();
+
+    m_queryHistoryInserted = text;
+    Editor->setFocus();
+}
+
+void toWorksheet::stepQueryHistory(int direction)
+{
+    QList<toQueryHistory::Entry> list;
+    try
+    {
+        list = toQueryHistory(connection()).entries();
+    }
+    TOCATCH;
+    if (list.isEmpty())
+    {
+        Utils::toStatusMessage(tr("No query history for this connection yet"), false, false);
+        return;
+    }
+
+    // keep cycling only while the last inserted entry is still selected untouched,
+    // otherwise start over from the newest entry and insert at the cursor
+    bool continuing = m_queryHistoryPos >= 0 &&
+                      Editor->hasSelectedText() &&
+                      Editor->selectedText() == m_queryHistoryInserted;
+    int pos = continuing ? m_queryHistoryPos + direction : (direction > 0 ? 0 : -1);
+    if (pos < 0 || pos >= list.size())
+    {
+        Utils::toStatusMessage(pos < 0 ? tr("Newest history entry reached") : tr("Oldest history entry reached"), false, false);
+        return;
+    }
+
+    m_queryHistoryPos = pos;
+    insertQueryHistoryEntry(list.at(pos).sql);
+    Utils::toStatusMessage(tr("Query history %1 of %2 (%3)")
+                           .arg(pos + 1).arg(list.size())
+                           .arg(list.at(pos).executed.toString(QString::fromLatin1("yyyy-MM-dd HH:mm"))),
+                           false, false);
+}
+
+void toWorksheet::slotQueryHistoryPrevious(void)
+{
+    stepQueryHistory(+1); // older
+}
+
+void toWorksheet::slotQueryHistoryNext(void)
+{
+    stepQueryHistory(-1); // newer
+}
+
+void toWorksheet::slotShowQueryHistory(void)
+{
+    try
+    {
+        toQueryHistory history(connection());
+        toQueryHistoryDialog dlg(history, this);
+        if (dlg.exec() == QDialog::Accepted && !dlg.selectedSql().isEmpty())
+        {
+            m_queryHistoryPos = -1; // dialog picks don't continue Ctrl+Alt+Up/Down cycling
+            insertQueryHistoryEntry(dlg.selectedSql());
+        }
+    }
+    TOCATCH;
 }
 
 void toWorksheet::slotExecutePreviousLog(void)

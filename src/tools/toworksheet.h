@@ -98,6 +98,7 @@ namespace ToConfiguration
                 , ExecLogBool             // #define CONF_EXEC_LOG
                 , ToplevelDescribeBool    // #define CONF_TOPLEVEL_DESCRIBE
                 , AutoLoad                // #define CONF_AUTO_LOAD (Default file)
+                , QueryHistoryInt         // max statements kept per connection in query history (0 = off)
             };
             QVariant defaultValue(int option) const;
     };
@@ -190,6 +191,9 @@ class toWorksheet : public toToolWidget, public toContextMenuHandler
         void slotLockConnection(bool);
         void slotEnableOutput(bool);
         void slotRefreshModel(toResultModel*);
+        void slotShowQueryHistory(void);
+        void slotQueryHistoryPrevious(void);
+        void slotQueryHistoryNext(void);
 
     protected:
         void closeEvent(QCloseEvent *event) override;
@@ -234,6 +238,13 @@ class toWorksheet : public toToolWidget, public toContextMenuHandler
         void mySQLBeforeCreate(QString &chk);
 
         void addLog(const QString &result);
+
+        //! Store a successfully executed statement in the persistent query history
+        void recordQueryHistory(const QString &sql);
+        //! Ctrl+Alt+Up/Down: step through history, replacing the previously inserted entry
+        void stepQueryHistory(int direction);
+        //! Insert @p sql at the cursor (replacing any selection) and select it
+        void insertQueryHistoryEntry(const QString &sql);
 
         void queryStarted(const toSyntaxAnalyzer::statement &stat);
         void lockConnection();
@@ -287,7 +298,13 @@ class toWorksheet : public toToolWidget, public toContextMenuHandler
         QAction *parseAct, *lockConnectionAct, *outputAct, *executeAct, *executeStepAct,
                 *executeAllAct,
                 *refreshAct, *describeAct, *describeActNew, *explainAct, *stopAct, *eraseAct,
-                *statisticAct, *previousAct, *nextAct, *saveLastAct;
+                *statisticAct, *previousAct, *nextAct, *saveLastAct,
+                *queryHistoryAct, *queryHistoryPrevAct, *queryHistoryNextAct;
+
+        //! Position in the query history while cycling (-1 = not cycling)
+        int m_queryHistoryPos;
+        //! Text inserted by the last history step; cycling continues only while it is still selected
+        QString m_queryHistoryInserted;
 
         QSharedPointer<toConnectionSubLoan> LockedConnection;
         bool lockConnectionActClicked;
