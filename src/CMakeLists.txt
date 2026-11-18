@@ -791,6 +791,8 @@ ENDIF(POPPLER_QT4_FOUND)
 # prevent opening the cmd.exe window
 IF (WIN32)
   LIST(APPEND TORA_LIBS "ws2_32.lib")
+  # DPAPI (CryptProtectData) for saved connection passwords
+  LIST(APPEND TORA_LIBS "crypt32.lib")
   # don't use console subsystem
   IF (MINGW)
     LIST(APPEND TORA_LIBS "-mwindows")

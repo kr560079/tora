@@ -35,6 +35,7 @@
 #include "widgets/toworkspace.h"
 #include "widgets/totoolwidget.h"
 #include "core/totool.h"
+#include "core/toconnection.h"
 #include "core/toglobalevent.h"
 #include "core/utils.h"
 #include "ts_log/ts_log_utils.h"
@@ -103,6 +104,7 @@ void toWorkSpace::addToolWidget(toToolWidget *toolWidget)
     // associate the tab with some useful QVariant data
     QVariant data = QVariant::fromValue(static_cast<QWidget*>(toolWidget));
     m_tabBar->setTabData(i.TabBarIndex, data);
+    setTabConnectionToolTip(i.TabBarIndex, toolWidget);
     if (m_lastWidget == NULL) // 0th tab was added (slotCurrentIndexChanged did nothing)
     {
         m_lastWidget = toolWidget;
@@ -203,6 +205,15 @@ void toWorkSpace::slotTabCloseRequested(int idx)
     }
 }
 
+void toWorkSpace::setTabConnectionToolTip(int index, toToolWidget *tool)
+{
+    try
+    {
+        m_tabBar->setTabToolTip(index, tool->connection().fullDescription());
+    }
+    catch (...) {} // tool without a connection - no tooltip
+}
+
 void toWorkSpace::slotToolCaptionChanged(QWidget *w)
 {
     toToolWidget *tool = dynamic_cast<toToolWidget*>(w);
@@ -212,6 +223,7 @@ void toWorkSpace::slotToolCaptionChanged(QWidget *w)
     QString caption = m_tabBar->tabText(index);
     if ( caption != tool->windowTitle())
         m_tabBar->setTabText(index, tool->windowTitle());
+    setTabConnectionToolTip(index, tool);
     //m_tabBar->setTabIcon(index, tool->windowIcon());
 }
 

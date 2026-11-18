@@ -46,6 +46,7 @@
 #include "core/todatabaseconfig.h"
 
 #include <QMenu>
+#include <QtCore/QRegularExpression>
 
 toConnection::toConnection(const QString &provider,
                            const QString &user, const QString &password,
@@ -79,7 +80,7 @@ toConnection::toConnection(const QString &provider,
 
     if(!ConnectionOptions.options.contains("TEST"))
     {
-    	pCache = new toCache(*this, description(false).trimmed());
+    	pCache = new toCache(*this, fullDescription().trimmed());
     	////Version = connSub->version();
 
         QMutexLocker clock(&ConnectionLock);
@@ -115,7 +116,7 @@ toConnection::toConnection(const toConnectionOptions &opts)
 
     if(!ConnectionOptions.options.contains("TEST"))
     {
-        pCache = new toCache(*this, description(false).trimmed());
+        pCache = new toCache(*this, fullDescription().trimmed());
         ////Version = connSub->version();
 
         QMutexLocker clock(&ConnectionLock);
@@ -339,7 +340,34 @@ void toConnection::commandCallback(QAction *act)
 	}
 }
 
-QString toConnection::description(bool version) const
+/** Reduce an Oracle connect string to the name users know the database by:
+ *  (DESCRIPTION=...(CONNECT_DATA=(SERVICE_NAME=x)))  -> x  (or SID=x)
+ *  //host:port/service[:server][/instance]           -> service
+ * Anything else (tnsnames alias, other providers) is returned unchanged.
+ */
+static QString shortDatabaseName(const QString &database)
+{
+    if (database.startsWith(QLatin1Char('(')))
+    {
+        static const QRegularExpression re(QString::fromLatin1("\\(\\s*(?:SERVICE_NAME|SID)\\s*=\\s*([^)\\s]+)\\s*\\)"),
+                                           QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatch m = re.match(database);
+        return m.hasMatch() ? m.captured(1) : database;
+    }
+    if (database.startsWith(QLatin1String("//")))
+    {
+        int slash = database.indexOf(QLatin1Char('/'), 2);
+        if (slash > 0)
+        {
+            QString service = database.mid(slash + 1).section(QLatin1Char('/'), 0, 0).section(QLatin1Char(':'), 0, 0);
+            if (!service.isEmpty())
+                return service;
+        }
+    }
+    return database;
+}
+
+QString toConnection::fullDescription() const
 {
     QString ret(User);
     ret += QString::fromLatin1("@");
@@ -353,6 +381,16 @@ QString toConnection::description(bool version) const
             ret += QString::fromLatin1(".");
         ret += Host;
     }
+    return ret;
+}
+
+QString toConnection::description(bool version) const
+{
+    QString ret;
+    if (Host.isEmpty() && Provider.startsWith(QLatin1String("Oracle")))
+        ret = User + QString::fromLatin1("@") + shortDatabaseName(Database);
+    else
+        ret = fullDescription();
 
     if (version)
     {

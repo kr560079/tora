@@ -133,6 +133,8 @@ QVariant toConnectionRegistry::data(const QModelIndex &idx, int role) const
     {
         case Qt::DisplayRole:
             return QVariant(m_ConnectionsList.at(idx.row())->description());
+        case Qt::ToolTipRole:
+            return QVariant(m_ConnectionsList.at(idx.row())->fullDescription());
         case Qt::DecorationRole:
             {
                 QString const& color = m_ConnectionsList.at(idx.row())->color();

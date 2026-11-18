@@ -111,9 +111,9 @@ void toViewConnections::handleActivated(const QModelIndex &index)
     if (provider == ORACLE_INSTANTCLIENT)
     {
         // create the rest of the connect string. this will work
-        // without an ORACLE_HOME.
-
-        database = "//" + host + "/" + database;
+        // without an ORACLE_HOME. Must match toNewConnection exactly
+        // (sid:NAME, pasted descriptors), otherwise ORA-12514.
+        database = toConnectionOptions::instantClientConnectString(opt.host, opt.port, database);
         host = "";
     }
 

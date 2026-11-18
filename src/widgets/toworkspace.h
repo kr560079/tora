@@ -85,6 +85,10 @@ class toWorkSpace : public QWidget
         void slotToolCaptionChanged(QWidget*);
 
     private:
+        /*! Tab captions show the short user@sid; the tooltip keeps the full
+            connect string so different hosts with the same SID can be told apart. */
+        void setTabConnectionToolTip(int index, toToolWidget *tool);
+
         QTabBar *m_tabBar;
 #if defined(TORA_EXPERIMENTAL)
         QLabel *m_label;

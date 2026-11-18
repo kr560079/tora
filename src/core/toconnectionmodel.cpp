@@ -75,7 +75,7 @@ void toConnectionModel::readConfig()
         QString host     = Settings.value("host", "").toString();
         QString database = Settings.value("database", "").toString();
         QString username = Settings.value("username", "").toString();
-        QString password = Utils::toUnobfuscate(Settings.value("password", "").toString());
+        QString password = Utils::toDecryptPassword(Settings.value("password", "").toString());
         QString schema   = Settings.value("schema", "").toString();
         QString color    = Settings.value("color", "").toString();
 
@@ -153,7 +153,7 @@ void toConnectionModel::saveConnection(toConnectionOptions const &opt)
     Settings.setValue("username", opt.username);
     if (toConfigurationNewSingle::Instance().option(ToConfiguration::Global::SavePasswordBool).toBool())
     {
-        Settings.setValue("password", Utils::toObfuscate(opt.password));
+        Settings.setValue("password", Utils::toEncryptPassword(opt.password));
     }
     Settings.setValue("host",     opt.host);
     Settings.setValue("port",     opt.port);

@@ -72,6 +72,14 @@ class toConnectionOptions
 
         QString toString() const;
 
+        /** Build the connect string passed to OCI by the "Oracle (Instant Client)"
+         * provider (no tnsnames.ora lookup). @p database may be a service name
+         * (=> Easy Connect //host:port/service), "sid:NAME" (=> full descriptor
+         * with SID=, since Easy Connect cannot express a SID) or an already
+         * complete "(DESCRIPTION=...)" descriptor (used as-is).
+         */
+        static QString instantClientConnectString(const QString &host, int port, const QString &database);
+
         QString provider, host, database, username, password, schema, color;
         quint16 port;
         QSet<QString> options;

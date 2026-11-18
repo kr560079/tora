@@ -154,6 +154,28 @@ template<> bool qMapLessThanKey<toConnectionOptions>(const toConnectionOptions &
     return false;
 }
 
+QString toConnectionOptions::instantClientConnectString(const QString &host, int port, const QString &database)
+{
+    if (database.startsWith(QLatin1String("("), Qt::CaseInsensitive))
+    {
+        // already a full connect descriptor, e.g. pasted
+        // (DESCRIPTION=(ADDRESS=...)(CONNECT_DATA=...)) - use as-is
+        return database;
+    }
+    if (database.startsWith(QLatin1String("sid:"), Qt::CaseInsensitive))
+    {
+        // Easy Connect syntax (//host:port/name) can only express
+        // SERVICE_NAME, never SID. Some listeners (older/non-RAC,
+        // or custom corporate listeners on non-default ports) only
+        // register a SID, so give users an explicit escape hatch.
+        QString sid = database.mid(4);
+        return "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=" + host +
+               ")(PORT=" + QString::number(port) +
+               "))(CONNECT_DATA=(SID=" + sid + ")))";
+    }
+    return "//" + host + ":" + QString::number(port) + "/" + database;
+}
+
 QString toConnectionOptions::toString() const
 {
     return QString("%1/%2@%3s:schema=%4;color=%5;port=%6;options=???")

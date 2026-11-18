@@ -60,6 +60,7 @@
 #ifdef Q_OS_WIN32
 #   define NOMINMAX
 #   include <windows.h>
+#   include <wincrypt.h>
 #endif
 
 #if defined(Q_OS_MAC)
@@ -660,6 +661,55 @@ namespace Utils
         }
         else
             return QString::fromUtf8(arr);
+    }
+
+    // Prefix marking a DPAPI-encrypted value; \001 and \002 are toObfuscate's
+    static const QChar DPAPI_PREFIX(0x03);
+
+    QString toEncryptPassword(const QString &str)
+    {
+        if (str.isEmpty())
+            return str;
+#ifdef Q_OS_WIN32
+        QByteArray plain = str.toUtf8();
+        DATA_BLOB in;
+        in.pbData = reinterpret_cast<BYTE*>(plain.data());
+        in.cbData = static_cast<DWORD>(plain.size());
+        DATA_BLOB out = { 0, NULL };
+        if (CryptProtectData(&in, L"TOra connection password", NULL, NULL, NULL,
+                             CRYPTPROTECT_UI_FORBIDDEN, &out))
+        {
+            QByteArray enc(reinterpret_cast<const char*>(out.pbData), static_cast<int>(out.cbData));
+            LocalFree(out.pbData);
+            SecureZeroMemory(plain.data(), plain.size());
+            return DPAPI_PREFIX + QString::fromLatin1(enc.toBase64());
+        }
+        SecureZeroMemory(plain.data(), plain.size());
+        TLOG(1, toDecorator, __HERE__) << "CryptProtectData failed: " << GetLastError() << std::endl;
+#endif
+        return toObfuscate(str);
+    }
+
+    QString toDecryptPassword(const QString &str)
+    {
+        if (str.isEmpty() || str.at(0) != DPAPI_PREFIX)
+            return toUnobfuscate(str);
+#ifdef Q_OS_WIN32
+        QByteArray enc = QByteArray::fromBase64(str.mid(1).toLatin1());
+        DATA_BLOB in;
+        in.pbData = reinterpret_cast<BYTE*>(enc.data());
+        in.cbData = static_cast<DWORD>(enc.size());
+        DATA_BLOB out = { 0, NULL };
+        if (CryptUnprotectData(&in, NULL, NULL, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &out))
+        {
+            QString ret = QString::fromUtf8(reinterpret_cast<const char*>(out.pbData), static_cast<int>(out.cbData));
+            SecureZeroMemory(out.pbData, out.cbData);
+            LocalFree(out.pbData);
+            return ret;
+        }
+        TLOG(1, toDecorator, __HERE__) << "CryptUnprotectData failed: " << GetLastError() << std::endl;
+#endif
+        return QString(); // other Windows user/machine, or not on Windows
     }
 
     void toSetThreadName(QThread const& p)

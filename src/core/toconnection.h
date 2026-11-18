@@ -177,10 +177,17 @@ class toConnection : public QObject
             return Version;
         }
 
-        /** Get a description of this connection.
+        /** Get a short description of this connection (user@sid) for tab
+         * captions and menus. Full connect descriptors and Easy Connect
+         * strings are reduced to their SERVICE_NAME/SID.
          * @version Include version in returned string.
          */
         QString description(bool version = true) const;
+
+        /** Get the unabbreviated user@database[.host] string. Unique per
+         * target, so also used as the object cache key and for tooltips.
+         */
+        QString fullDescription() const;
 
         /** Get a list of currently running SQLs */
         QList<QString> running(void) const;

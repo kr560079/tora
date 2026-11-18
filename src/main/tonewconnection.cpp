@@ -223,7 +223,7 @@ void toNewConnection::writeSettings(bool checkHistory)
         Settings.setValue("username", Username->text());
         if (toConfigurationNewSingle::Instance().option(ToConfiguration::Global::SavePasswordBool).toBool())
         {
-            Settings.setValue("password", Utils::toObfuscate(Password->text()));
+            Settings.setValue("password", Utils::toEncryptPassword(Password->text()));
         }
         Settings.setValue("host", Host->currentText());
         Settings.setValue("port", Port->value());
@@ -271,7 +271,7 @@ void toNewConnection::writeSettings(bool checkHistory)
         Settings.setValue("port", opt.port);
         if (toConfigurationNewSingle::Instance().option(ToConfiguration::Global::SavePasswordBool).toBool())
         {
-            Settings.setValue("password", Utils::toObfuscate(opt.password));
+            Settings.setValue("password", Utils::toEncryptPassword(opt.password));
         }
         Settings.beginGroup("options");
         Q_FOREACH(QString s, opt.options)
@@ -599,28 +599,7 @@ toConnectionOptions toNewConnection::makeConnectionOtions(bool test) const
     {
         // create the rest of the connect string. this will work
         // without an ORACLE_HOME.
-        if (database.startsWith(QLatin1String("("), Qt::CaseInsensitive))
-        {
-            // already a full connect descriptor, e.g. pasted
-            // (DESCRIPTION=(ADDRESS=...)(CONNECT_DATA=...)) - use as-is
-        }
-        else if (database.startsWith(QLatin1String("sid:"), Qt::CaseInsensitive))
-        {
-            // Easy Connect syntax (//host:port/name) can only express
-            // SERVICE_NAME, never SID. Some listeners (older/non-RAC,
-            // or custom corporate listeners on non-default ports) only
-            // register a SID, so give users an explicit escape hatch.
-            QString sid = database.mid(4);
-            database = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=" + Host->currentText() +
-                       ")(PORT=" + QString::number(port) +
-                       "))(CONNECT_DATA=(SID=" + sid + ")))";
-        }
-        else
-        {
-            database = "//" + Host->currentText() +
-                       ":" + QString::number(port) +
-                       "/" + database;
-        }
+        database = toConnectionOptions::instantClientConnectString(Host->currentText(), port, database);
         host = "";
     }
 

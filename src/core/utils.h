@@ -411,6 +411,19 @@ namespace Utils
     */
     TORA_EXPORT QString toUnobfuscate(const QString &str);
 
+    /** Protect a password before it is written to the settings store.
+     * On Windows it is encrypted with DPAPI (CryptProtectData), so it can only
+     * be decrypted by the same Windows user. Elsewhere falls back to @ref toObfuscate.
+     */
+    TORA_EXPORT QString toEncryptPassword(const QString &str);
+
+    /** Unmake the actions of @ref toEncryptPassword. Also accepts values written
+     * by @ref toObfuscate (older TOra versions) and plain text.
+     * @return Original password, or empty string when it cannot be decrypted
+     * (e.g. settings copied from another Windows account).
+     */
+    TORA_EXPORT QString toDecryptPassword(const QString &str);
+
     /** Set name for the current thread. Should be called from run method
      *  @param use "*this" as parameter
      *
